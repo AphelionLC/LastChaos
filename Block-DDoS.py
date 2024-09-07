@@ -104,6 +104,19 @@ PROTECTION_LEVELS = {
     }
 }
 
+# Define DDoS thresholds for each protection level
+DDOS_THRESHOLDS = {
+    1: 400,  # For Lenient level
+    2: 350,
+    3: 300,
+    4: 250,
+    5: 200,
+    6: 100   # For Maximum security level
+}
+
+# Set DDOS_THRESHOLD initially to None
+DDOS_THRESHOLD = None
+
 # Empty allowed IPs and ports (will be populated by user input)
 ALLOWED_MARIADB_IPS = []
 DEFAULT_MARIADB_IPS = ["127.0.0.1"]  # Always included
@@ -136,13 +149,16 @@ failed_attempts = defaultdict(int)  # Track failed connection attempts for each 
 
 # ============================ COLOR CODES ============================ #
 class Colors:
-    RESET = "\033[0m"      # Reset color
-    RED = "\033[31m"       # Red
-    GREEN = "\033[32m"     # Green
-    YELLOW = "\033[33m"    # Yellow
-    BLUE = "\033[34m"      # Blue
-    CYAN = "\033[36m"      # Cyan
-    LIGHT_RED = "\033[91m" # Light Red
+    RESET = "\033[0m"         # Reset color
+    RED = "\033[31m"          # Red
+    GREEN = "\033[32m"        # Green
+    YELLOW = "\033[33m"       # Yellow
+    BLUE = "\033[34m"         # Blue
+    CYAN = "\033[36m"         # Cyan
+    LIGHT_GREEN = "\033[92m"  # Light Green
+    LIGHT_RED = "\033[91m"    # Light Red
+    ORANGE = "\033[38;5;214m" # Orange color for specific messages
+    BOLD_WHITE = "\033[1;37m" # Bold White for making numbers more visible
 
 # ============================ LOGGING FUNCTIONS ============================ #
 def log_error(error_message):
@@ -288,9 +304,7 @@ def chunk_ports(port_list, chunk_size=15):
 def setup_iptables():
     """Set up IPTables rules to mitigate various attacks while allowing game traffic."""
     try:
-        print(f"Applying Protection Level: {PROTECTION_LEVEL}")
         # Flush existing IPTables rules and set default policies to DROP
-        print("Flushing existing IPTables rules and setting default policies to DROP...")
         subprocess.run("iptables -F", shell=True, check=True)
         subprocess.run("iptables -X", shell=True, check=True)
 
@@ -300,58 +314,39 @@ def setup_iptables():
         subprocess.run("iptables -P OUTPUT ACCEPT", shell=True, check=True)
 
         # Accept loopback traffic (for local processes)
-        print("Allowing loopback traffic...")
         subprocess.run("iptables -A INPUT -i lo -j ACCEPT", shell=True, check=True)
         subprocess.run("iptables -A OUTPUT -o lo -j ACCEPT", shell=True, check=True)
-
-        # Allow traffic to and from the download server (51.89.166.171)
-        download_server_ip = "51.89.166.171"
-        print(f"Allowing traffic to and from download server IP: {download_server_ip}")
-        subprocess.run(f"iptables -A INPUT -s {download_server_ip} -j ACCEPT", shell=True, check=True)
-        subprocess.run(f"iptables -A OUTPUT -d {download_server_ip} -j ACCEPT", shell=True, check=True)
 
         # Apply specific rules for MariaDB IP restriction
         if ALLOWED_MARIADB_IPS:
             for ip in ALLOWED_MARIADB_IPS:
-                print(f"Allowing MariaDB access from IP: {ip}")
                 subprocess.run(f"iptables -A INPUT -p tcp --dport 3306 -s {ip} -j ACCEPT", shell=True, check=True)
 
         # Block all other IPs from accessing MariaDB
-        print("Blocking all other IPs from accessing MariaDB on port 3306...")
         subprocess.run(f"iptables -A INPUT -p tcp --dport 3306 -j DROP", shell=True, check=True)
 
         # SYN flood protection
-        print(f"Applying SYN flood protection: {SYNFLOOD_RATE}, burst {SYNFLOOD_BURST}")
         subprocess.run(f"iptables -A INPUT -p tcp --syn -m limit --limit {SYNFLOOD_RATE} --limit-burst {SYNFLOOD_BURST} -j ACCEPT", shell=True, check=True)
 
         # Allow inbound traffic on user-specified and default ports
         if CT_PORTS:
-            print(f"Allowing inbound traffic on default and user-specified ports: {','.join(CT_PORTS)}")
             subprocess.run(f"iptables -A INPUT -p tcp -m multiport --dports {','.join(CT_PORTS)} -j ACCEPT", shell=True, check=True)
 
         # Allow outbound traffic on the specified ports
         if CT_PORTS:
-            print(f"Allowing outbound traffic on specified ports: {','.join(CT_PORTS)}")
             subprocess.run(f"iptables -A OUTPUT -p tcp -m multiport --sports {','.join(CT_PORTS)} -j ACCEPT", shell=True, check=True)
 
         # Apply connection limits
-        print(f"Applying connection limits: {CT_LIMIT}")
         subprocess.run(f"iptables -A INPUT -p tcp -m connlimit --connlimit-above {CT_LIMIT} --connlimit-mask 32 -j REJECT", shell=True, check=True)
 
         # Port flood protection
-        print(f"Applying port flood protection with burst {LF_DOS_LIMIT}, interval {LF_DOS_INTERVAL}")
         subprocess.run(f"iptables -A INPUT -p tcp -m multiport --dports {','.join(CT_PORTS)} -m limit --limit {LF_DOS_LIMIT}/minute --limit-burst {LF_DOS_INTERVAL} -j ACCEPT", shell=True, check=True)
 
         # Block all other unspecified ports explicitly
-        print("Blocking all other unspecified ports...")
         subprocess.run("iptables -A INPUT -p tcp --syn -j REJECT", shell=True, check=True)
 
-        print("IPTables rules applied successfully.")
     except Exception as e:
         log_error(f"Error setting up iptables: {str(e)}")
-        print(f"Error setting up iptables: {str(e)}")
-
-
 
 def block_ip(ip, reason):
     """Block an IP using IPTables and log the blocked IP, excluding 127.0.0.1."""
@@ -414,10 +409,9 @@ def monitor_ddos():
                     ip = line.split()[4].split(':')[0]
                     connection_count[ip] += 1
 
-            # Threshold for DDoS detection
-            THRESHOLD = 100  # Adjust as needed
+            # Use the dynamic DDOS_THRESHOLD set earlier
             for ip, count in connection_count.items():
-                if ip != "127.0.0.1" and count > THRESHOLD:
+                if ip != "127.0.0.1" and count > DDOS_THRESHOLD:
                     block_ip(ip, "Potential DDoS attack")
                     log_ddos_monitor(f"Blocked IP {ip} for potential DDoS attack")
 
@@ -431,7 +425,7 @@ def kill_existing_script():
     try:
         current_pid = os.getpid()
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            if proc.info['name'] in ['python', 'python3'] and 'Block-DDoS-Phoenix.py' in proc.info['cmdline'][1]:
+            if proc.info['name'] in ['python', 'python3'] and 'Block-DDoS.py' in proc.info['cmdline'][1]:
                 if proc.info['pid'] != current_pid:
                     proc.terminate()
                     proc.wait()
@@ -503,30 +497,70 @@ def main():
     """Main function to start the script and handle errors during startup and runtime."""
     try:
         display_welcome_message()
+
+        # First, kill existing scripts and install dependencies without showing progress
         kill_existing_script()
         install_dependencies()
 
-        global PROTECTION_LEVEL, ALLOWED_MARIADB_IPS, CT_PORTS
+        global PROTECTION_LEVEL, ALLOWED_MARIADB_IPS, CT_PORTS, DDOS_THRESHOLD
+        
+        # Collect inputs from the user without echoing yet
         PROTECTION_LEVEL = show_menu()
 
-        # Get allowed IPs and ports from the user
+        # Set the DDoS threshold based on the selected protection level
+        DDOS_THRESHOLD = DDOS_THRESHOLDS[PROTECTION_LEVEL]
+
+        # Collect allowed MariaDB IPs and ports
         ALLOWED_MARIADB_IPS = get_allowed_mariadb_ips()
         CT_PORTS = get_allowed_ports()
 
+        # After collecting all inputs, echo the steps in light green and numbers in bold white
+        print(f"\n{Colors.LIGHT_GREEN}Setting DDoS threshold to {Colors.BOLD_WHITE}{DDOS_THRESHOLD}{Colors.LIGHT_GREEN} connections for protection level {Colors.BOLD_WHITE}{PROTECTION_LEVEL}.{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Allowed MariaDB IP addresses: {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Allowed ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
+        
+        # Now proceed with the rest of the steps
+        print(f"{Colors.LIGHT_GREEN}Applying protection level {Colors.BOLD_WHITE}{PROTECTION_LEVEL}{Colors.LIGHT_GREEN} settings...{Colors.RESET}")
         apply_protection_level(PROTECTION_LEVEL, CT_PORTS)
 
-        print(f"{Colors.CYAN}Applying Protection Level {PROTECTION_LEVEL}: {PROTECTION_LEVELS[PROTECTION_LEVEL]['description']}{Colors.RESET}")
-        print(f"{Colors.CYAN}Flushing existing IPTables rules...{Colors.RESET}")
-
+        # Run IPTables setup only once here, right after all inputs are collected
+        print(f"{Colors.LIGHT_GREEN}Flushing existing IPTables rules...{Colors.RESET}")
         setup_iptables()
 
-        # Run the script in the background
+        # IPTables setup details in light green with numbers in bold white
+        print(f"{Colors.LIGHT_GREEN}Applying Protection Level: {Colors.BOLD_WHITE}{PROTECTION_LEVEL}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Flushing existing IPTables rules and setting default policies to DROP...{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Allowing loopback traffic...{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Allowing MariaDB access from IP: {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Blocking all other IPs from accessing MariaDB on port 3306...{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Applying SYN flood protection: {Colors.BOLD_WHITE}{SYNFLOOD_RATE}{Colors.LIGHT_GREEN}, burst {Colors.BOLD_WHITE}{SYNFLOOD_BURST}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Allowing inbound traffic on default and user-specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Allowing outbound traffic on specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Applying connection limits: {Colors.BOLD_WHITE}{CT_LIMIT}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Applying port flood protection with burst {Colors.BOLD_WHITE}{LF_DOS_LIMIT}{Colors.LIGHT_GREEN}, interval {Colors.BOLD_WHITE}{LF_DOS_INTERVAL}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Blocking all other unspecified ports...{Colors.RESET}")
+        
+        # Print IPTables rules applied message in orange
+        print(f"{Colors.ORANGE}IPTables rules applied successfully.{Colors.RESET}")
+        
+        # Print running in the background message in orange
+        print(f"{Colors.ORANGE}Running the script in the background...{Colors.RESET}")
+        
         run_in_background()
 
-        # Start log and DDoS monitoring in separate threads
+        # Display the final success message before starting threads
+        print(f"{Colors.YELLOW}=================================================================================================")
+        print(f" Security Setup finished! Your server is now protected from DDoS attacks and unauthorized access.")
+        print(f"================================================================================================={Colors.RESET}")
+
+        # Start the monitoring threads after the final message
+        print(f"{Colors.LIGHT_GREEN}Starting log monitoring thread...{Colors.RESET}")
         log_monitor_thread = threading.Thread(target=monitor_logs)
+
+        print(f"{Colors.LIGHT_GREEN}Starting DDoS monitoring thread...{Colors.RESET}")
         ddos_monitor_thread = threading.Thread(target=monitor_ddos)
 
+        print(f"{Colors.LIGHT_GREEN}Starting both monitoring threads...{Colors.RESET}")
         log_monitor_thread.start()
         ddos_monitor_thread.start()
 
@@ -534,6 +568,7 @@ def main():
         ddos_monitor_thread.join()
 
     except Exception as e:
+        print("An error occurred in the main function.")
         log_error(f"Error in main: {str(e)}")
 
 if __name__ == "__main__":
