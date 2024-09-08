@@ -283,7 +283,7 @@ def get_allowed_ports():
 def apply_protection_level(level, allowed_ports):
     """Apply settings based on the user's chosen protection level and allowed ports."""
     try:
-        global SYNFLOOD_RATE, SYNFLOOD_BURST, CT_LIMIT, CT_BLOCK_TIME, LF_TRIGGER, LOG_MONITOR_INTERVAL, LF_DOS_LIMIT, LF_DOS_INTERVAL, DDOS_MONITOR_INTERVAL, CONNLIMIT, PORTFLOOD, ICMP_RATE, UDP_LIMIT, BLOCK_INVALID
+        global SYNFLOOD_RATE, SYNFLOOD_BURST, CT_LIMIT, CT_BLOCK_TIME, LF_TRIGGER, LOG_MONITOR_INTERVAL, LF_DOS_LIMIT, LF_DOS_INTERVAL, DDOS_MONITOR_INTERVAL, CONNLIMIT, PORTFLOOD, ICMP_RATE, UDP_LIMIT, BLOCK_INVALID, BLOCK_DNS
 
         config = PROTECTION_LEVELS.get(level)
         if config:
@@ -299,6 +299,8 @@ def apply_protection_level(level, allowed_ports):
             ICMP_RATE = config['ICMP_RATE']
             UDP_LIMIT = config['UDP_LIMIT']
             BLOCK_INVALID = config['BLOCK_INVALID']
+            BLOCK_DNS = config.get('BLOCK_DNS', False)  # Check if DNS blocking is enabled in this level
+
             # Use user-defined ports (combined with default ports) and apply connection limits and port flooding dynamically
             if allowed_ports:
                 CONNLIMIT = f"{','.join(allowed_ports)};{config['CONNLIMIT']}"  # Dynamic port + level-based limit
@@ -306,6 +308,11 @@ def apply_protection_level(level, allowed_ports):
             else:
                 CONNLIMIT = ""
                 PORTFLOOD = ""
+
+            # If DNS blocking is enabled, block UDP traffic on port 53 (DNS)
+            if BLOCK_DNS:
+                subprocess.run("iptables -A INPUT -p udp --dport 53 -j DROP", shell=True, check=True)
+                subprocess.run("iptables -A OUTPUT -p udp --dport 53 -j DROP", shell=True, check=True)
         else:
             log_error("Invalid protection level selected. Defaulting to Level 1.")
             apply_protection_level(1, allowed_ports)
