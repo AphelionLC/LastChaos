@@ -618,38 +618,30 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Applying ICMP rate limit: {Colors.BOLD_WHITE}{ICMP_RATE}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Applying UDP flood protection limit: {Colors.BOLD_WHITE}{UDP_LIMIT}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Blocking invalid packets...{Colors.RESET}")
-        
         # Add DNS blocking step if it's part of the protection level
         if PROTECTION_LEVELS[PROTECTION_LEVEL]['BLOCK_DNS']:
         print(f"{Colors.LIGHT_GREEN}Blocking DNS traffic on UDP port 53...{Colors.RESET}")
-        print(f"{Colors.LIGHT_GREEN}Applying RST flood protection: rate {Colors.BOLD_WHITE}{PROTECTION_LEVELS[PROTECTION_LEVEL]['RST_RATE']}{Colors.LIGHT_GREEN}, burst {Colors.BOLD_WHITE}{PROTECTION_LEVELS[PROTECTION_LEVEL]['RST_BURST']}{Colors.RESET}")
-        # Allowing and blocking ports
+        # Print RST flood protection settings
+        print(f"{Colors.LIGHT_GREEN}Applying RST flood protection: rate {Colors.BOLD_WHITE}{PROTECTION_LEVELS[PROTECTION_LEVEL]['RST_RATE']}{Colors.LIGHT_GREEN}, burst {Colors.BOLD_WHITE}{PROTECTION_LEVELS[PROTECTION_LEVEL]['RST_BURST']}{Colors.RESET}")# Allowing and blocking ports
         print(f"{Colors.LIGHT_GREEN}Allowing inbound traffic on default and user-specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Allowing outbound traffic on specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Applying connection limits: {Colors.BOLD_WHITE}{CT_LIMIT}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Applying port flood protection with burst {Colors.BOLD_WHITE}{LF_DOS_LIMIT}{Colors.LIGHT_GREEN}, interval {Colors.BOLD_WHITE}{LF_DOS_INTERVAL}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Blocking all other unspecified ports...{Colors.RESET}")
-        
         # Print IPTables rules applied message in orange
         print(f"{Colors.ORANGE}IPTables rules applied successfully.{Colors.RESET}")
-        
         # Print running in the background message in orange
         print(f"{Colors.ORANGE}Running the script in the background...{Colors.RESET}")
-        
         run_in_background()
-
         # Display the final success message before starting threads
         print(f"{Colors.YELLOW}=================================================================================================")
         print(f" Security Setup finished! Your server is now protected from DDoS attacks and unauthorized access.")
         print(f"================================================================================================={Colors.RESET}")
-
         # Start the monitoring threads after the final message
         print(f"{Colors.LIGHT_GREEN}Starting log monitoring thread...{Colors.RESET}")
         log_monitor_thread = threading.Thread(target=monitor_logs)
-
         print(f"{Colors.LIGHT_GREEN}Starting DDoS monitoring thread...{Colors.RESET}")
         ddos_monitor_thread = threading.Thread(target=monitor_ddos)
-
         print(f"{Colors.LIGHT_GREEN}Starting both monitoring threads...{Colors.RESET}")
         log_monitor_thread.start()
         ddos_monitor_thread.start()
