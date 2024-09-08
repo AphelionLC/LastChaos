@@ -537,6 +537,24 @@ def extract_ip_from_log(log_line):
         log_error(f"Error extracting IP from log: {str(e)}")
         return None
 
+def rotate_logs():
+    """Rotate logs when they exceed 100MB, delete and recreate them."""
+    log_files = [BLOCKED_IP_LOG, ATTEMPTED_CONNECTIONS_LOG, DDOS_MONITOR_LOG]
+
+    # 100 MB threshold for logs
+    MAX_LOG_SIZE = 100 * 1024 * 1024  # 100 MB in bytes
+
+    for log_file in log_files:
+        if os.path.exists(log_file):
+            if os.path.getsize(log_file) > MAX_LOG_SIZE:
+                try:
+                    print(f"{Colors.YELLOW}Rotating log: {log_file} (exceeds 100MB)...{Colors.RESET}")
+                    os.remove(log_file)  # Delete the log file
+                    open(log_file, 'a').close()  # Recreate an empty log file
+                    print(f"{Colors.GREEN}Log rotated successfully: {log_file}{Colors.RESET}")
+                except Exception as e:
+                    log_error(f"Error rotating log {log_file}: {str(e)}")
+
 # ============================ MAIN FUNCTION ============================ #
 def main():
     """Main function to start the script and handle errors during startup and runtime."""
@@ -621,6 +639,11 @@ def main():
         log_monitor_thread.join()
         ddos_monitor_thread.join()
 
+        # **Rotate logs periodically during runtime**
+        while True:
+            rotate_logs()
+            time.sleep(3600)  # Check log size every hour
+    
     except Exception as e:
         print("An error occurred in the main function.")
         log_error(f"Error in main: {str(e)}")
