@@ -24,9 +24,10 @@ PROTECTION_LEVELS = {
         "CONNLIMIT": 500,
         "PORTFLOOD_BURST": 100,
         "PORTFLOOD_INTERVAL": 60,
-        "ICMP_RATE": "1/s",          # ICMP rate limit (adjustable per level)
-        "UDP_LIMIT": "500/s",        # UDP rate limit to prevent floods
-        "BLOCK_INVALID": True        # Block invalid packets (enabled for all levels)
+        "ICMP_RATE": "1/s", 
+        "UDP_LIMIT": "500/s",
+        "BLOCK_INVALID": True,
+        "BLOCK_DNS": True        # Block DNS traffic (UDP port 53)
     },
     2: {
         "description": "Moderate: Balanced protection between performance and security",
@@ -44,7 +45,8 @@ PROTECTION_LEVELS = {
         "PORTFLOOD_INTERVAL": 60,
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "400/s",
-        "BLOCK_INVALID": True
+        "BLOCK_INVALID": True,
+        "BLOCK_DNS": True
     },
     3: {
         "description": "Medium: Moderate connection limits and failed login restrictions",
@@ -62,7 +64,8 @@ PROTECTION_LEVELS = {
         "PORTFLOOD_INTERVAL": 90,
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "300/s",
-        "BLOCK_INVALID": True
+        "BLOCK_INVALID": True,
+        "BLOCK_DNS": True
     },
     4: {
         "description": "Strict: Lower connection limits, more frequent log monitoring",
@@ -80,7 +83,8 @@ PROTECTION_LEVELS = {
         "PORTFLOOD_INTERVAL": 120,
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "200/s",
-        "BLOCK_INVALID": True
+        "BLOCK_INVALID": True,
+        "BLOCK_DNS": True
     },
     5: {
         "description": "Very Strict: Very tight limits, minimal connection bursts allowed",
@@ -98,7 +102,8 @@ PROTECTION_LEVELS = {
         "PORTFLOOD_INTERVAL": 90,
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "100/s",
-        "BLOCK_INVALID": True
+        "BLOCK_INVALID": True,
+        "BLOCK_DNS": True
     },
     6: {
         "description": "Maximum: Maximum security with ultra-tight restrictions",
@@ -116,7 +121,8 @@ PROTECTION_LEVELS = {
         "PORTFLOOD_INTERVAL": 60,
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "50/s",
-        "BLOCK_INVALID": True
+        "BLOCK_INVALID": True,
+        "BLOCK_DNS": True
     }
 }
 
@@ -206,9 +212,9 @@ def display_welcome_message():
     """Display a welcome message with script details."""
     try:
         print(f"""\n{Colors.GREEN}
-        ===================================================
+        =============================================================
                      WELCOME TO THE DDoS PROTECTION SCRIPT  
-        ===================================================
+        =============================================================
         {Colors.RESET}
         This script will help you configure your server's security
         with multiple protection levels to guard against DDoS attacks.
@@ -369,6 +375,10 @@ def setup_iptables():
         # Block invalid packets
         if BLOCK_INVALID:
             subprocess.run(f"iptables -A INPUT -m state --state INVALID -j DROP", shell=True, check=True)
+
+        # Block DNS traffic (UDP port 53)
+        if PROTECTION_LEVELS[PROTECTION_LEVEL]['BLOCK_DNS']:
+            subprocess.run("iptables -A INPUT -p udp --dport 53 -j DROP", shell=True, check=True)
 
         # Block all other unspecified ports explicitly
         subprocess.run("iptables -A INPUT -p tcp --syn -j REJECT", shell=True, check=True)
@@ -562,9 +572,15 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Allowing MariaDB access from IP: {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Blocking all other IPs from accessing MariaDB on port 3306...{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Applying SYN flood protection: {Colors.BOLD_WHITE}{SYNFLOOD_RATE}{Colors.LIGHT_GREEN}, burst {Colors.BOLD_WHITE}{SYNFLOOD_BURST}{Colors.RESET}")
-        print(f"{Colors.LIGHT_GREEN}Applying ICMP rate limit: {Colors.RESET}{ICMP_RATE}")
-        print(f"{Colors.LIGHT_GREEN}Applying UDP flood protection limit: {Colors.RESET}{UDP_LIMIT}")
+        print(f"{Colors.LIGHT_GREEN}Applying ICMP rate limit: {Colors.BOLD_WHITE}{ICMP_RATE}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Applying UDP flood protection limit: {Colors.BOLD_WHITE}{UDP_LIMIT}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Blocking invalid packets...{Colors.RESET}")
+        
+        # Add DNS blocking step if it's part of the protection level
+        if PROTECTION_LEVELS[PROTECTION_LEVEL]['BLOCK_DNS']:
+            print(f"{Colors.LIGHT_GREEN}Blocking DNS traffic on UDP port 53...{Colors.RESET}")
+        
+        # Allowing and blocking ports
         print(f"{Colors.LIGHT_GREEN}Allowing inbound traffic on default and user-specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Allowing outbound traffic on specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Applying connection limits: {Colors.BOLD_WHITE}{CT_LIMIT}{Colors.RESET}")
