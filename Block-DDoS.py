@@ -11,23 +11,25 @@ import math
 # Protection Level Configuration (1 = lenient, 6 = maximum security)
 PROTECTION_LEVELS = {
     1: {
-        "description": "Lenient: Higher connection limits, fewer login attempt restrictions",
-        "SYNFLOOD_RATE": "1000/s",
-        "SYNFLOOD_BURST": "500",
-        "CT_LIMIT": 5000,
-        "CT_BLOCK_TIME": "3600",
-        "LF_TRIGGER": 10,
-        "LOG_MONITOR_INTERVAL": 60,
-        "LF_DOS_LIMIT": 2000,
-        "LF_DOS_INTERVAL": 200,
-        "DDOS_MONITOR_INTERVAL": 180,
-        "CONNLIMIT": 500,
-        "PORTFLOOD_BURST": 100,
-        "PORTFLOOD_INTERVAL": 60,
-        "ICMP_RATE": "1/s", 
-        "UDP_LIMIT": "500/s",
-        "BLOCK_INVALID": True,
-        "BLOCK_DNS": True        # Block DNS traffic (UDP port 53)
+        "description": "Lenient: Higher connection limits, fewer login attempt restrictions",  # General description
+        "SYNFLOOD_RATE": "1000/s",    # Rate limit for SYN flood protection (1000 packets per second)
+        "SYNFLOOD_BURST": "500",      # Burst limit for SYN flood protection (allows up to 500 packets in a short burst)
+        "CT_LIMIT": 5000,             # Maximum concurrent connections allowed (connection tracking limit)
+        "CT_BLOCK_TIME": "3600",      # Time (in seconds) to block an IP if it exceeds the connection limit (1 hour)
+        "LF_TRIGGER": 10,             # Number of failed login attempts before triggering an IP block
+        "LOG_MONITOR_INTERVAL": 60,   # Interval (in seconds) to monitor log files (check for failed login attempts)
+        "LF_DOS_LIMIT": 2000,         # Port flood protection limit: maximum allowed connections per second
+        "LF_DOS_INTERVAL": 200,       # Port flood protection burst: burst allowed for port flooding (up to 200 packets)
+        "DDOS_MONITOR_INTERVAL": 180, # Interval (in seconds) to check for potential DDoS attacks (every 3 minutes)
+        "CONNLIMIT": 500,             # Maximum allowed connections per source IP before it is limited
+        "PORTFLOOD_BURST": 100,       # Maximum burst for incoming connections per port (prevents connection flooding)
+        "PORTFLOOD_INTERVAL": 60,     # Time interval for port flood monitoring (in seconds)
+        "ICMP_RATE": "1/s",           # Rate limit for ICMP (ping) packets (1 packet per second)
+        "UDP_LIMIT": "500/s",         # Rate limit for UDP packets to prevent UDP floods (500 packets per second)
+        "BLOCK_INVALID": True,        # Block invalid packets (packets with incorrect state or malformed)
+        "BLOCK_DNS": True,            # Block DNS traffic (prevents abuse of DNS services, blocks UDP port 53)
+        "RST_RATE": "5/s",            # Rate limit for RST (Reset) packets (5 RST packets per second)
+        "RST_BURST": "10"             # Burst limit for RST flood protection (allows up to 10 RST packets)
     },
     2: {
         "description": "Moderate: Balanced protection between performance and security",
@@ -46,7 +48,9 @@ PROTECTION_LEVELS = {
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "400/s",
         "BLOCK_INVALID": True,
-        "BLOCK_DNS": True
+        "BLOCK_DNS": True,
+        "RST_RATE": "4/s",
+        "RST_BURST": "8"
     },
     3: {
         "description": "Medium: Moderate connection limits and failed login restrictions",
@@ -65,7 +69,9 @@ PROTECTION_LEVELS = {
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "300/s",
         "BLOCK_INVALID": True,
-        "BLOCK_DNS": True
+        "BLOCK_DNS": True,
+        "RST_RATE": "3/s",
+        "RST_BURST": "6"
     },
     4: {
         "description": "Strict: Lower connection limits, more frequent log monitoring",
@@ -84,7 +90,9 @@ PROTECTION_LEVELS = {
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "200/s",
         "BLOCK_INVALID": True,
-        "BLOCK_DNS": True
+        "BLOCK_DNS": True,
+        "RST_RATE": "2/s",
+        "RST_BURST": "5"
     },
     5: {
         "description": "Very Strict: Very tight limits, minimal connection bursts allowed",
@@ -103,7 +111,9 @@ PROTECTION_LEVELS = {
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "100/s",
         "BLOCK_INVALID": True,
-        "BLOCK_DNS": True
+        "BLOCK_DNS": True,
+        "RST_RATE": "1/s",
+        "RST_BURST": "3"
     },
     6: {
         "description": "Maximum: Maximum security with ultra-tight restrictions",
@@ -122,7 +132,9 @@ PROTECTION_LEVELS = {
         "ICMP_RATE": "1/s",
         "UDP_LIMIT": "50/s",
         "BLOCK_INVALID": True,
-        "BLOCK_DNS": True
+        "BLOCK_DNS": True,
+        "RST_RATE": "1/s",
+        "RST_BURST": "2"
     }
 }
 
@@ -283,7 +295,7 @@ def get_allowed_ports():
 def apply_protection_level(level, allowed_ports):
     """Apply settings based on the user's chosen protection level and allowed ports."""
     try:
-        global SYNFLOOD_RATE, SYNFLOOD_BURST, CT_LIMIT, CT_BLOCK_TIME, LF_TRIGGER, LOG_MONITOR_INTERVAL, LF_DOS_LIMIT, LF_DOS_INTERVAL, DDOS_MONITOR_INTERVAL, CONNLIMIT, PORTFLOOD, ICMP_RATE, UDP_LIMIT, BLOCK_INVALID, BLOCK_DNS
+        global SYNFLOOD_RATE, SYNFLOOD_BURST, CT_LIMIT, CT_BLOCK_TIME, LF_TRIGGER, LOG_MONITOR_INTERVAL, LF_DOS_LIMIT, LF_DOS_INTERVAL, DDOS_MONITOR_INTERVAL, CONNLIMIT, PORTFLOOD, ICMP_RATE, UDP_LIMIT, BLOCK_INVALID, BLOCK_DNS, RST_RATE, RST_BURST
 
         config = PROTECTION_LEVELS.get(level)
         if config:
@@ -299,7 +311,9 @@ def apply_protection_level(level, allowed_ports):
             ICMP_RATE = config['ICMP_RATE']
             UDP_LIMIT = config['UDP_LIMIT']
             BLOCK_INVALID = config['BLOCK_INVALID']
-            BLOCK_DNS = config.get('BLOCK_DNS', False)  # Check if DNS blocking is enabled in this level
+            BLOCK_DNS = config.get('BLOCK_DNS', False)
+            RST_RATE = config['RST_RATE']  # Add RST rate
+            RST_BURST = config['RST_BURST']  # Add RST burst
 
             # Use user-defined ports (combined with default ports) and apply connection limits and port flooding dynamically
             if allowed_ports:
@@ -359,6 +373,10 @@ def setup_iptables():
 
         # SYN flood protection
         subprocess.run(f"iptables -A INPUT -p tcp --syn -m limit --limit {SYNFLOOD_RATE} --limit-burst {SYNFLOOD_BURST} -j ACCEPT", shell=True, check=True)
+
+        # RST Flood protection
+        subprocess.run(f"iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit {RST_RATE} --limit-burst {RST_BURST} -j ACCEPT", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP", shell=True, check=True)
 
         # Allow inbound traffic on user-specified and default ports
         if CT_PORTS:
