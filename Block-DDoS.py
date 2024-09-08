@@ -9,8 +9,6 @@ import math
 
 # ============================ CONFIGURATION ============================ #
 # Protection Level Configuration (1 = lenient, 6 = maximum security)
-PROTECTION_LEVEL = None  # Will be set by user choice from menu
-
 PROTECTION_LEVELS = {
     1: {
         "description": "Lenient: Higher connection limits, fewer login attempt restrictions",
@@ -23,9 +21,12 @@ PROTECTION_LEVELS = {
         "LF_DOS_LIMIT": 2000,
         "LF_DOS_INTERVAL": 200,
         "DDOS_MONITOR_INTERVAL": 180,
-        "CONNLIMIT": 500,  # Adjust this for the level
-        "PORTFLOOD_BURST": 100,  # Burst rate for port flooding protection
-        "PORTFLOOD_INTERVAL": 60  # Time interval for port flooding protection
+        "CONNLIMIT": 500,
+        "PORTFLOOD_BURST": 100,
+        "PORTFLOOD_INTERVAL": 60,
+        "ICMP_RATE": "1/s",          # ICMP rate limit (adjustable per level)
+        "UDP_LIMIT": "500/s",        # UDP rate limit to prevent floods
+        "BLOCK_INVALID": True        # Block invalid packets (enabled for all levels)
     },
     2: {
         "description": "Moderate: Balanced protection between performance and security",
@@ -40,7 +41,10 @@ PROTECTION_LEVELS = {
         "DDOS_MONITOR_INTERVAL": 120,
         "CONNLIMIT": 300,
         "PORTFLOOD_BURST": 80,
-        "PORTFLOOD_INTERVAL": 60
+        "PORTFLOOD_INTERVAL": 60,
+        "ICMP_RATE": "1/s",
+        "UDP_LIMIT": "400/s",
+        "BLOCK_INVALID": True
     },
     3: {
         "description": "Medium: Moderate connection limits and failed login restrictions",
@@ -55,7 +59,10 @@ PROTECTION_LEVELS = {
         "DDOS_MONITOR_INTERVAL": 100,
         "CONNLIMIT": 200,
         "PORTFLOOD_BURST": 60,
-        "PORTFLOOD_INTERVAL": 90
+        "PORTFLOOD_INTERVAL": 90,
+        "ICMP_RATE": "1/s",
+        "UDP_LIMIT": "300/s",
+        "BLOCK_INVALID": True
     },
     4: {
         "description": "Strict: Lower connection limits, more frequent log monitoring",
@@ -70,7 +77,10 @@ PROTECTION_LEVELS = {
         "DDOS_MONITOR_INTERVAL": 60,
         "CONNLIMIT": 100,
         "PORTFLOOD_BURST": 40,
-        "PORTFLOOD_INTERVAL": 120
+        "PORTFLOOD_INTERVAL": 120,
+        "ICMP_RATE": "1/s",
+        "UDP_LIMIT": "200/s",
+        "BLOCK_INVALID": True
     },
     5: {
         "description": "Very Strict: Very tight limits, minimal connection bursts allowed",
@@ -85,7 +95,10 @@ PROTECTION_LEVELS = {
         "DDOS_MONITOR_INTERVAL": 60,
         "CONNLIMIT": 50,
         "PORTFLOOD_BURST": 30,
-        "PORTFLOOD_INTERVAL": 90
+        "PORTFLOOD_INTERVAL": 90,
+        "ICMP_RATE": "1/s",
+        "UDP_LIMIT": "100/s",
+        "BLOCK_INVALID": True
     },
     6: {
         "description": "Maximum: Maximum security with ultra-tight restrictions",
@@ -100,7 +113,10 @@ PROTECTION_LEVELS = {
         "DDOS_MONITOR_INTERVAL": 60,
         "CONNLIMIT": 25,
         "PORTFLOOD_BURST": 20,
-        "PORTFLOOD_INTERVAL": 60
+        "PORTFLOOD_INTERVAL": 60,
+        "ICMP_RATE": "1/s",
+        "UDP_LIMIT": "50/s",
+        "BLOCK_INVALID": True
     }
 }
 
@@ -261,7 +277,7 @@ def get_allowed_ports():
 def apply_protection_level(level, allowed_ports):
     """Apply settings based on the user's chosen protection level and allowed ports."""
     try:
-        global SYNFLOOD_RATE, SYNFLOOD_BURST, CT_LIMIT, CT_BLOCK_TIME, LF_TRIGGER, LOG_MONITOR_INTERVAL, LF_DOS_LIMIT, LF_DOS_INTERVAL, DDOS_MONITOR_INTERVAL, CONNLIMIT, PORTFLOOD
+        global SYNFLOOD_RATE, SYNFLOOD_BURST, CT_LIMIT, CT_BLOCK_TIME, LF_TRIGGER, LOG_MONITOR_INTERVAL, LF_DOS_LIMIT, LF_DOS_INTERVAL, DDOS_MONITOR_INTERVAL, CONNLIMIT, PORTFLOOD, ICMP_RATE, UDP_LIMIT, BLOCK_INVALID
 
         config = PROTECTION_LEVELS.get(level)
         if config:
@@ -274,6 +290,9 @@ def apply_protection_level(level, allowed_ports):
             LF_DOS_LIMIT = config['LF_DOS_LIMIT']
             LF_DOS_INTERVAL = config['LF_DOS_INTERVAL']
             DDOS_MONITOR_INTERVAL = config['DDOS_MONITOR_INTERVAL']
+            ICMP_RATE = config['ICMP_RATE']
+            UDP_LIMIT = config['UDP_LIMIT']
+            BLOCK_INVALID = config['BLOCK_INVALID']
             # Use user-defined ports (combined with default ports) and apply connection limits and port flooding dynamically
             if allowed_ports:
                 CONNLIMIT = f"{','.join(allowed_ports)};{config['CONNLIMIT']}"  # Dynamic port + level-based limit
@@ -317,7 +336,7 @@ def setup_iptables():
         subprocess.run("iptables -A INPUT -i lo -j ACCEPT", shell=True, check=True)
         subprocess.run("iptables -A OUTPUT -o lo -j ACCEPT", shell=True, check=True)
 
-        # Apply specific rules for MariaDB IP restriction
+        # Allow MariaDB access from allowed IPs
         if ALLOWED_MARIADB_IPS:
             for ip in ALLOWED_MARIADB_IPS:
                 subprocess.run(f"iptables -A INPUT -p tcp --dport 3306 -s {ip} -j ACCEPT", shell=True, check=True)
@@ -339,8 +358,17 @@ def setup_iptables():
         # Apply connection limits
         subprocess.run(f"iptables -A INPUT -p tcp -m connlimit --connlimit-above {CT_LIMIT} --connlimit-mask 32 -j REJECT", shell=True, check=True)
 
-        # Port flood protection
-        subprocess.run(f"iptables -A INPUT -p tcp -m multiport --dports {','.join(CT_PORTS)} -m limit --limit {LF_DOS_LIMIT}/minute --limit-burst {LF_DOS_INTERVAL} -j ACCEPT", shell=True, check=True)
+        # Apply ICMP rate limiting
+        subprocess.run(f"iptables -A INPUT -p icmp --icmp-type echo-request -m limit --limit {ICMP_RATE} -j ACCEPT", shell=True, check=True)
+        subprocess.run(f"iptables -A INPUT -p icmp --icmp-type echo-request -j DROP", shell=True, check=True)
+
+        # Apply UDP flood protection
+        subprocess.run(f"iptables -A INPUT -p udp -m limit --limit {UDP_LIMIT} -j ACCEPT", shell=True, check=True)
+        subprocess.run(f"iptables -A INPUT -p udp -j DROP", shell=True, check=True)
+
+        # Block invalid packets
+        if BLOCK_INVALID:
+            subprocess.run(f"iptables -A INPUT -m state --state INVALID -j DROP", shell=True, check=True)
 
         # Block all other unspecified ports explicitly
         subprocess.run("iptables -A INPUT -p tcp --syn -j REJECT", shell=True, check=True)
@@ -534,6 +562,9 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Allowing MariaDB access from IP: {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Blocking all other IPs from accessing MariaDB on port 3306...{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Applying SYN flood protection: {Colors.BOLD_WHITE}{SYNFLOOD_RATE}{Colors.LIGHT_GREEN}, burst {Colors.BOLD_WHITE}{SYNFLOOD_BURST}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Applying ICMP rate limit: {Colors.RESET}{ICMP_RATE}")
+        print(f"{Colors.LIGHT_GREEN}Applying UDP flood protection limit: {Colors.RESET}{UDP_LIMIT}")
+        print(f"{Colors.LIGHT_GREEN}Blocking invalid packets...{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Allowing inbound traffic on default and user-specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Allowing outbound traffic on specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Applying connection limits: {Colors.BOLD_WHITE}{CT_LIMIT}{Colors.RESET}")
