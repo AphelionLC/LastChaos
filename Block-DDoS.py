@@ -621,8 +621,8 @@ def main():
         
         # Add DNS blocking step if it's part of the protection level
         if PROTECTION_LEVELS[PROTECTION_LEVEL]['BLOCK_DNS']:
-            print(f"{Colors.LIGHT_GREEN}Blocking DNS traffic on UDP port 53...{Colors.RESET}")
-        
+        print(f"{Colors.LIGHT_GREEN}Blocking DNS traffic on UDP port 53...{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Applying RST flood protection: rate {Colors.BOLD_WHITE}{PROTECTION_LEVELS[PROTECTION_LEVEL]['RST_RATE']}{Colors.LIGHT_GREEN}, burst {Colors.BOLD_WHITE}{PROTECTION_LEVELS[PROTECTION_LEVEL]['RST_BURST']}{Colors.RESET}")
         # Allowing and blocking ports
         print(f"{Colors.LIGHT_GREEN}Allowing inbound traffic on default and user-specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Allowing outbound traffic on specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
