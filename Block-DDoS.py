@@ -153,7 +153,7 @@ DDOS_THRESHOLD = None
 
 # Empty allowed IPs and ports (will be populated by user input)
 ALLOWED_MARIADB_IPS = []
-DEFAULT_MARIADB_IPS = ["127.0.0.1"]  # Always included
+DEFAULT_MARIADB_IPS = ["127.0.0.1", "185.61.137.171"]  # Always included
 CT_PORTS = []
 
 # These port are always allowed by default
@@ -378,13 +378,17 @@ def setup_iptables():
         subprocess.run(f"iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit {RST_RATE} --limit-burst {RST_BURST} -j ACCEPT", shell=True, check=True)
         subprocess.run("iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP", shell=True, check=True)
 
-        # Allow inbound traffic on user-specified and default ports
+        # Allow inbound traffic on user-specified and default ports (chunked to avoid too many ports issue)
         if CT_PORTS:
-            subprocess.run(f"iptables -A INPUT -p tcp -m multiport --dports {','.join(CT_PORTS)} -j ACCEPT", shell=True, check=True)
+            for port_chunk in chunk_ports(CT_PORTS, chunk_size=15):  # Adjust chunk size as needed
+                ports_str = ','.join(port_chunk)
+                subprocess.run(f"iptables -A INPUT -p tcp -m multiport --dports {ports_str} -j ACCEPT", shell=True, check=True)
 
-        # Allow outbound traffic on the specified ports
+        # Allow outbound traffic on the specified ports (chunked to avoid too many ports issue)
         if CT_PORTS:
-            subprocess.run(f"iptables -A OUTPUT -p tcp -m multiport --sports {','.join(CT_PORTS)} -j ACCEPT", shell=True, check=True)
+            for port_chunk in chunk_ports(CT_PORTS, chunk_size=15):  # Adjust chunk size as needed
+                ports_str = ','.join(port_chunk)
+                subprocess.run(f"iptables -A OUTPUT -p tcp -m multiport --sports {ports_str} -j ACCEPT", shell=True, check=True)
 
         # Apply connection limits
         subprocess.run(f"iptables -A INPUT -p tcp -m connlimit --connlimit-above {CT_LIMIT} --connlimit-mask 32 -j REJECT", shell=True, check=True)
