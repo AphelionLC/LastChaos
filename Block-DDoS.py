@@ -20,7 +20,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 60,   # Interval (in seconds) to monitor log files (check for failed login attempts)
         "LF_DOS_LIMIT": 2000,         # Port flood protection limit: maximum allowed connections per second
         "LF_DOS_INTERVAL": 200,       # Port flood protection burst: burst allowed for port flooding (up to 200 packets)
-        "DDOS_MONITOR_INTERVAL": 180, # Interval (in seconds) to check for potential DDoS attacks (every 3 minutes)
+        "DDOS_MONITOR_INTERVAL": 10,  # Interval (in seconds) to check for potential DDoS attacks (every 3 minutes)
         "CONNLIMIT": 500,             # Maximum allowed connections per source IP before it is limited
         "PORTFLOOD_BURST": 100,       # Maximum burst for incoming connections per port (prevents connection flooding)
         "PORTFLOOD_INTERVAL": 60,     # Time interval for port flood monitoring (in seconds)
@@ -41,7 +41,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 50,
         "LF_DOS_LIMIT": 1500,
         "LF_DOS_INTERVAL": 150,
-        "DDOS_MONITOR_INTERVAL": 120,
+        "DDOS_MONITOR_INTERVAL": 10,
         "CONNLIMIT": 300,
         "PORTFLOOD_BURST": 80,
         "PORTFLOOD_INTERVAL": 60,
@@ -62,7 +62,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 40,
         "LF_DOS_LIMIT": 1000,
         "LF_DOS_INTERVAL": 100,
-        "DDOS_MONITOR_INTERVAL": 100,
+        "DDOS_MONITOR_INTERVAL": 10,
         "CONNLIMIT": 200,
         "PORTFLOOD_BURST": 60,
         "PORTFLOOD_INTERVAL": 90,
@@ -83,7 +83,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 30,
         "LF_DOS_LIMIT": 500,
         "LF_DOS_INTERVAL": 50,
-        "DDOS_MONITOR_INTERVAL": 60,
+        "DDOS_MONITOR_INTERVAL": 10,
         "CONNLIMIT": 100,
         "PORTFLOOD_BURST": 40,
         "PORTFLOOD_INTERVAL": 120,
@@ -104,7 +104,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 20,
         "LF_DOS_LIMIT": 300,
         "LF_DOS_INTERVAL": 30,
-        "DDOS_MONITOR_INTERVAL": 60,
+        "DDOS_MONITOR_INTERVAL": 10,
         "CONNLIMIT": 50,
         "PORTFLOOD_BURST": 30,
         "PORTFLOOD_INTERVAL": 90,
@@ -125,7 +125,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 10,
         "LF_DOS_LIMIT": 200,
         "LF_DOS_INTERVAL": 20,
-        "DDOS_MONITOR_INTERVAL": 60,
+        "DDOS_MONITOR_INTERVAL": 10,
         "CONNLIMIT": 25,
         "PORTFLOOD_BURST": 20,
         "PORTFLOOD_INTERVAL": 60,
@@ -140,46 +140,50 @@ PROTECTION_LEVELS = {
 
 # Define DDoS thresholds for each protection level
 DDOS_THRESHOLDS = {
-    1: 400,  # For Lenient level
-    2: 350,
-    3: 300,
-    4: 250,
-    5: 200,
-    6: 100   # For Maximum security level
+    1: 300,  # Lower thresholds for testing purposes
+    2: 250,
+    3: 200,
+    4: 180,
+    5: 150,
+    6: 100   # Will block after 2 connections for maximum security level
 }
 
-# Set DDOS_THRESHOLD initially to None
-DDOS_THRESHOLD = None
+# Initial variables
+INITIAL_PROTECTION_LEVEL = None  # Store initial protection level set by the user
+CURRENT_PROTECTION_LEVEL = None  # Track current active protection level
+DDOS_THRESHOLD = None            # Dynamic DDoS threshold, will change based on protection level
+SUSPICIOUS_ACTIVITY_THRESHOLD = 3  # Number of DDoS triggers before upgrading level
 
 # Empty allowed IPs and ports (will be populated by user input)
 ALLOWED_MARIADB_IPS = []
-DEFAULT_MARIADB_IPS = ["127.0.0.1", "185.61.137.171", "79.117.116.141", "80.194.10.67"]  # Always included
+DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.117.116.141", "80.194.10.67"]  # Always included
 CT_PORTS = []
 
+# Add your server's IP here
+WHITELISTED_IPS = ["127.0.0.1"]
+
 # These port are always allowed by default
-DEFAULT_PORTS = ["20", "22", "25", "53", "80", "110", "143", "443", "7777", "4101", "4102", "4103", "4104"]  # Always included ports
+DEFAULT_PORTS = ["20", "22", "25", "53", "80", "110", "143", "443"]  # Always included ports
 
-# Logging settings
-SCRIPT_DIR = os.getcwd()  # Get the current directory where the script is run
-SECURITY_DIR = os.path.join(SCRIPT_DIR, "1-Security-Bot")  # Directory for logs
-BLOCKED_IP_LOG = os.path.join(SECURITY_DIR, "blocked_ips.log")  # Blocked IP log
-ATTEMPTED_CONNECTIONS_LOG = os.path.join(SECURITY_DIR, "connection_attempts.log")  # SSH/FTP connection attempts
-DDOS_MONITOR_LOG = os.path.join(SECURITY_DIR, "DDoS-Monitor.log")  # Log for DDoS monitoring checks
+# Log files
+SCRIPT_DIR = os.getcwd()
+SECURITY_DIR = os.path.join(SCRIPT_DIR, "1-Security-Bot")
+BLOCKED_IP_LOG = os.path.join(SECURITY_DIR, "blocked_ips.log")
+ATTEMPTED_CONNECTIONS_LOG = os.path.join(SECURITY_DIR, "connection_attempts.log")
+DDOS_MONITOR_LOG = os.path.join(SECURITY_DIR, "DDoS-Monitor.log")
 ERROR_LOG = os.path.join(SECURITY_DIR, "error.log")
+LEVEL_CHANGE_LOG = os.path.join(SECURITY_DIR, "level_change.log")
 
-# Ensure the directory for logs exists
+# Ensure log directory exists
 if not os.path.exists(SECURITY_DIR):
     os.makedirs(SECURITY_DIR)
 
-# Ensure the log files are created if they don't exist
-open(BLOCKED_IP_LOG, 'a').close()
-open(ATTEMPTED_CONNECTIONS_LOG, 'a').close()
-open(DDOS_MONITOR_LOG, 'a').close()
-open(ERROR_LOG, 'a').close()
+# Ensure log files exist
+for log_file in [BLOCKED_IP_LOG, ATTEMPTED_CONNECTIONS_LOG, DDOS_MONITOR_LOG, ERROR_LOG, LEVEL_CHANGE_LOG]:
+    open(log_file, 'a').close()
 
-# Track blocked IPs and failed attempts
 blocked_ips = defaultdict(int)
-failed_attempts = defaultdict(int)  # Track failed connection attempts for each IP
+failed_attempts = defaultdict(int)
 
 # ============================ COLOR CODES ============================ #
 class Colors:
@@ -196,7 +200,6 @@ class Colors:
 
 # ============================ LOGGING FUNCTIONS ============================ #
 def log_error(error_message):
-    """Log errors to the error.log file."""
     try:
         with open(ERROR_LOG, 'a') as f:
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ERROR: {error_message}\n")
@@ -204,7 +207,6 @@ def log_error(error_message):
         print(f"Error logging the error: {str(log_error)}")
 
 def log_blocked_ip(ip, reason):
-    """Log blocked IPs to the blocked_ips.log file with reasons."""
     try:
         with open(BLOCKED_IP_LOG, 'a') as f:
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Blocked IP: {ip} - Reason: {reason}\n")
@@ -212,12 +214,42 @@ def log_blocked_ip(ip, reason):
         log_error(f"Error logging blocked IP: {str(e)}")
 
 def log_ddos_monitor(activity):
-    """Log DDoS monitoring activity."""
     try:
         with open(DDOS_MONITOR_LOG, 'a') as f:
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {activity}\n")
     except Exception as e:
         log_error(f"Error logging DDoS monitoring activity: {str(e)}")
+
+def log_level_change(old_level, new_level, reason):
+    try:
+        with open(LEVEL_CHANGE_LOG, 'a') as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Protection level changed from {old_level} to {new_level}. Reason: {reason}\n")
+    except Exception as e:
+        log_error(f"Error logging level change: {str(e)}")
+
+# ============================ AUTO PROTECTION LEVEL ADJUSTMENTS ============================ #
+def adjust_protection_level(activity):
+    """Automatically upgrade or downgrade protection level based on activity."""
+    global CURRENT_PROTECTION_LEVEL, INITIAL_PROTECTION_LEVEL
+
+    if activity == "upgrade" and CURRENT_PROTECTION_LEVEL < 6:
+        old_level = CURRENT_PROTECTION_LEVEL
+        CURRENT_PROTECTION_LEVEL += 1
+        print(f"{Colors.LIGHT_GREEN}Upgrading protection level to {Colors.BOLD_WHITE}{CURRENT_PROTECTION_LEVEL}{Colors.RESET} due to suspicious activity.")
+        
+        # Flush and reapply rules for the new level
+        apply_protection_level(CURRENT_PROTECTION_LEVEL, CT_PORTS)
+        log_level_change(old_level, CURRENT_PROTECTION_LEVEL, "Suspicious activity detected")
+
+    elif activity == "downgrade" and CURRENT_PROTECTION_LEVEL > INITIAL_PROTECTION_LEVEL:
+        old_level = CURRENT_PROTECTION_LEVEL
+        CURRENT_PROTECTION_LEVEL -= 1
+        print(f"{Colors.LIGHT_GREEN}Downgrading protection level to {Colors.BOLD_WHITE}{CURRENT_PROTECTION_LEVEL}{Colors.RESET} due to lower activity.")
+        
+        # Flush and reapply rules for the downgraded level
+        apply_protection_level(CURRENT_PROTECTION_LEVEL, CT_PORTS)
+        log_level_change(old_level, CURRENT_PROTECTION_LEVEL, "Suspicious activity subsided")
+
 
 # ============================ ERROR HANDLING IN FUNCTIONS ============================ #
 def display_welcome_message():
@@ -292,46 +324,49 @@ def get_allowed_ports():
         log_error(f"Error getting allowed ports: {str(e)}")
         return DEFAULT_PORTS
 
+# ============================ APPLY PROTECTION LEVEL ============================ #
 def apply_protection_level(level, allowed_ports):
-    """Apply settings based on the user's chosen protection level and allowed ports."""
-    try:
-        global SYNFLOOD_RATE, SYNFLOOD_BURST, CT_LIMIT, CT_BLOCK_TIME, LF_TRIGGER, LOG_MONITOR_INTERVAL, LF_DOS_LIMIT, LF_DOS_INTERVAL, DDOS_MONITOR_INTERVAL, CONNLIMIT, PORTFLOOD, ICMP_RATE, UDP_LIMIT, BLOCK_INVALID, BLOCK_DNS, RST_RATE, RST_BURST
+    """Apply protection settings based on the current level and allowed ports."""
+    global SYNFLOOD_RATE, SYNFLOOD_BURST, CT_LIMIT, CT_BLOCK_TIME, LF_TRIGGER, LOG_MONITOR_INTERVAL, LF_DOS_LIMIT, LF_DOS_INTERVAL, DDOS_MONITOR_INTERVAL, CONNLIMIT, PORTFLOOD, ICMP_RATE, UDP_LIMIT, BLOCK_INVALID, BLOCK_DNS, RST_RATE, RST_BURST
 
-        config = PROTECTION_LEVELS.get(level)
-        if config:
-            SYNFLOOD_RATE = config['SYNFLOOD_RATE']
-            SYNFLOOD_BURST = config['SYNFLOOD_BURST']
-            CT_LIMIT = config['CT_LIMIT']
-            CT_BLOCK_TIME = config['CT_BLOCK_TIME']
-            LF_TRIGGER = config['LF_TRIGGER']
-            LOG_MONITOR_INTERVAL = config['LOG_MONITOR_INTERVAL']
-            LF_DOS_LIMIT = config['LF_DOS_LIMIT']
-            LF_DOS_INTERVAL = config['LF_DOS_INTERVAL']
-            DDOS_MONITOR_INTERVAL = config['DDOS_MONITOR_INTERVAL']
-            ICMP_RATE = config['ICMP_RATE']
-            UDP_LIMIT = config['UDP_LIMIT']
-            BLOCK_INVALID = config['BLOCK_INVALID']
-            BLOCK_DNS = config.get('BLOCK_DNS', False)
-            RST_RATE = config['RST_RATE']  # Add RST rate
-            RST_BURST = config['RST_BURST']  # Add RST burst
+    # Get the protection level configuration
+    config = PROTECTION_LEVELS.get(level)
 
-            # Use user-defined ports (combined with default ports) and apply connection limits and port flooding dynamically
-            if allowed_ports:
-                CONNLIMIT = f"{','.join(allowed_ports)};{config['CONNLIMIT']}"  # Dynamic port + level-based limit
-                PORTFLOOD = f"{','.join(allowed_ports)};tcp;{config['PORTFLOOD_BURST']};{config['PORTFLOOD_INTERVAL']}"
-            else:
-                CONNLIMIT = ""
-                PORTFLOOD = ""
+    if config:
+        # Flush IPTables before applying the new rules
+        flush_iptables_rules()
 
-            # If DNS blocking is enabled, block UDP traffic on port 53 (DNS)
-            if BLOCK_DNS:
-                subprocess.run("iptables -A INPUT -p udp --dport 53 -j DROP", shell=True, check=True)
-                subprocess.run("iptables -A OUTPUT -p udp --dport 53 -j DROP", shell=True, check=True)
+        SYNFLOOD_RATE = config['SYNFLOOD_RATE']
+        SYNFLOOD_BURST = config['SYNFLOOD_BURST']
+        CT_LIMIT = config['CT_LIMIT']
+        CT_BLOCK_TIME = config['CT_BLOCK_TIME']
+        LF_TRIGGER = config['LF_TRIGGER']
+        LOG_MONITOR_INTERVAL = config['LOG_MONITOR_INTERVAL']
+        LF_DOS_LIMIT = config['LF_DOS_LIMIT']
+        LF_DOS_INTERVAL = config['LF_DOS_INTERVAL']
+        DDOS_MONITOR_INTERVAL = config['DDOS_MONITOR_INTERVAL']
+        ICMP_RATE = config['ICMP_RATE']
+        UDP_LIMIT = config['UDP_LIMIT']
+        BLOCK_INVALID = config['BLOCK_INVALID']
+        BLOCK_DNS = config.get('BLOCK_DNS', False)
+        RST_RATE = config['RST_RATE']
+        RST_BURST = config['RST_BURST']
+
+        # Apply user-defined ports
+        if allowed_ports:
+            CONNLIMIT = f"{','.join(allowed_ports)};{config['CONNLIMIT']}"
+            PORTFLOOD = f"{','.join(allowed_ports)};tcp;{config['PORTFLOOD_BURST']};{config['PORTFLOOD_INTERVAL']}"
         else:
-            log_error("Invalid protection level selected. Defaulting to Level 1.")
-            apply_protection_level(1, allowed_ports)
-    except Exception as e:
-        log_error(f"Error applying protection level: {str(e)}")
+            CONNLIMIT = ""
+            PORTFLOOD = ""
+
+        # Reapply IPTables rules based on the new level
+        setup_iptables()
+
+        print(f"Applied protection level {level} with SYNFLOOD rate {SYNFLOOD_RATE}, burst {SYNFLOOD_BURST}")
+    else:
+        log_error("Invalid protection level selected. Defaulting to Level 1.")
+        apply_protection_level(1, allowed_ports)
 
 def rule_exists(rule):
     """Check if a given iptables rule already exists."""
@@ -458,35 +493,45 @@ def monitor_logs():
     except Exception as e:
         log_error(f"Error monitoring logs: {str(e)}")
 
+# ============================ MONITOR DDoS ATTACKS ============================ #
 def monitor_ddos():
-    """Monitor for potential DDoS attacks by analyzing connections using netstat."""
+    """Monitor for potential DDoS attacks by analyzing connections using netstat and adjust protection level."""
+    global suspicious_activity_count
     try:
         while True:
-            # Log DDoS monitoring activity
             log_ddos_monitor("Checking for DDoS activity...")
 
-            # Get TCP connections
             result = subprocess.run(["netstat", "-ant"], stdout=subprocess.PIPE, universal_newlines=True)
             connections = result.stdout.splitlines()
 
-            # Count established connections per IP
             connection_count = defaultdict(int)
             for line in connections:
                 if "ESTABLISHED" in line:
                     ip = line.split()[4].split(':')[0]
                     connection_count[ip] += 1
 
-            # Use the dynamic DDOS_THRESHOLD set earlier
+            suspicious_activity_detected = False
             for ip, count in connection_count.items():
                 if ip != "127.0.0.1" and count > DDOS_THRESHOLD:
+                    suspicious_activity_detected = True
                     block_ip(ip, "Potential DDoS attack")
                     log_ddos_monitor(f"Blocked IP {ip} for potential DDoS attack")
 
-            # Sleep for the configured DDoS monitor interval before checking again
+            if suspicious_activity_detected:
+                suspicious_activity_count += 1
+                print(f"Suspicious activity detected! Count: {suspicious_activity_count}")
+                if suspicious_activity_count >= SUSPICIOUS_ACTIVITY_THRESHOLD:
+                    adjust_protection_level("upgrade")
+                    suspicious_activity_count = 0  # Reset count after upgrade
+            else:
+                if suspicious_activity_count > 0:  # Reset the count if no suspicious activity is detected
+                    suspicious_activity_count -= 1
+                adjust_protection_level("downgrade")
+
             time.sleep(DDOS_MONITOR_INTERVAL)
     except Exception as e:
         log_error(f"Error monitoring DDoS: {str(e)}")
-
+        
 def kill_existing_script():
     """Check if the script is already running and kill it if found."""
     try:
@@ -543,7 +588,7 @@ def run_in_background():
     try:
         pid = os.fork()  # Fork the current process
         if pid > 0:
-            print(f"Script is running in the background with PID {pid}. Exiting terminal.")
+            print(f"{Colors.ORANGE}Script is running in the background with PID {pid}. Exiting terminal.{Colors.RESET}")
             os._exit(0)  # Exit the parent process to allow the child process to continue running
     except AttributeError:
         # If os.fork() is not available (on Windows for example), handle the error.
@@ -651,10 +696,14 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Installing necessary dependencies...{Colors.RESET}")
         install_dependencies()
 
-        global PROTECTION_LEVEL, ALLOWED_MARIADB_IPS, CT_PORTS, DDOS_THRESHOLD
+        global PROTECTION_LEVEL, ALLOWED_MARIADB_IPS, CT_PORTS, DDOS_THRESHOLD, INITIAL_PROTECTION_LEVEL, CURRENT_PROTECTION_LEVEL, suspicious_activity_count
         
         # Collect inputs from the user
         PROTECTION_LEVEL = show_menu()
+        INITIAL_PROTECTION_LEVEL = PROTECTION_LEVEL
+        CURRENT_PROTECTION_LEVEL = PROTECTION_LEVEL
+        suspicious_activity_count = 0  # Track suspicious activity events
+
         print(f"{Colors.LIGHT_GREEN}Setting protection level to {Colors.BOLD_WHITE}{PROTECTION_LEVEL}{Colors.LIGHT_GREEN}.{Colors.RESET}")
 
         # Set the DDoS threshold based on the selected protection level
@@ -663,10 +712,10 @@ def main():
 
         # Collect allowed MariaDB IPs and ports
         ALLOWED_MARIADB_IPS = get_allowed_mariadb_ips()
-        print(f"{Colors.LIGHT_GREEN}Allowed MariaDB IP addresses: {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Allowed MariaDB IP addresses (including defaults): {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
 
         CT_PORTS = get_allowed_ports()
-        print(f"{Colors.LIGHT_GREEN}Allowed ports for traffic: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Allowed ports for traffic (including defaults): {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
 
         # Flush IPTables rules and apply new settings
         print(f"{Colors.LIGHT_GREEN}Flushing existing IPTables rules...{Colors.RESET}")
@@ -714,19 +763,17 @@ def main():
         save_iptables_config()
 
         # Set up the systemd service to restore IPTables rules on system boot
-        print(f"{Colors.LIGHT_GREEN}Setting up IPTables restore service...{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Setting up IPTables restore service on reboot...{Colors.RESET}")
         setup_iptables_restore_service()
 
         # Start the background process
         print(f"{Colors.LIGHT_GREEN}Running the script in the background...{Colors.RESET}")
         run_in_background()
 
-        # Display the final success message before starting threads
-        print(f"{Colors.YELLOW}=================================================================================================")
-        print(f" Security Setup finished! Your server is now protected from DDoS attacks and unauthorized access.")
-        print(f"================================================================================================={Colors.RESET}")
+        # Automated protection level adjustment based on activity  
+        print(f"{Colors.ORANGE}Protection Upgrade Automation ... {Colors.RED}Active!{Colors.RESET}")
 
-        # Start the monitoring threads after the final message
+        # Start the monitoring threads
         print(f"{Colors.LIGHT_GREEN}Starting log monitoring thread...{Colors.RESET}")
         log_monitor_thread = threading.Thread(target=monitor_logs)
 
@@ -736,15 +783,31 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Starting both monitoring threads...{Colors.RESET}")
         log_monitor_thread.start()
         ddos_monitor_thread.start()
-
-        log_monitor_thread.join()
-        ddos_monitor_thread.join()
-
-        # **Rotate logs periodically during runtime**
+        
+        # Final message
+        print(f"{Colors.ORANGE}Script is running in the background with PID {os.getpid()}. Exiting terminal.{Colors.RESET}")
+        print(f"{Colors.YELLOW}=================================================================================================")
+        print(f" Security Setup finished! Your server is now protected from DDoS attacks and unauthorized access.")
+        print(f"================================================================================================={Colors.RESET}")
+        
         while True:
+            # Monitor for suspicious activity
+            suspicious_activity_detected = monitor_ddos()  # Assume this function returns a boolean for activity detection
+
+            if suspicious_activity_detected:
+                suspicious_activity_count += 1
+                if suspicious_activity_count >= SUSPICIOUS_ACTIVITY_THRESHOLD and CURRENT_PROTECTION_LEVEL < 6:
+                    print(f"{Colors.LIGHT_RED}Suspicious activity detected! Upgrading protection level...{Colors.RESET}")
+                    adjust_protection_level("upgrade")
+                    suspicious_activity_count = 0  # Reset count after upgrading
+            else:
+                if CURRENT_PROTECTION_LEVEL > INITIAL_PROTECTION_LEVEL:
+                    print(f"{Colors.LIGHT_GREEN}DDoS activity subsided. Downgrading protection level...{Colors.RESET}")
+                    adjust_protection_level("downgrade")
+
             rotate_logs()
-            time.sleep(3600)  # Check log size every hour
-    
+            time.sleep(DDOS_MONITOR_INTERVAL)  # Check again after the interval            
+
     except Exception as e:
         print(f"{Colors.RED}An error occurred in the main function.{Colors.RESET}")
         log_error(f"Error in main: {str(e)}")
