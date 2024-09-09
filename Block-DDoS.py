@@ -153,11 +153,11 @@ DDOS_THRESHOLD = None
 
 # Empty allowed IPs and ports (will be populated by user input)
 ALLOWED_MARIADB_IPS = []
-DEFAULT_MARIADB_IPS = ["127.0.0.1", "185.61.137.171"]  # Always included
+DEFAULT_MARIADB_IPS = ["127.0.0.1", "185.61.137.171", "79.117.116.141", "80.194.10.67"]  # Always included
 CT_PORTS = []
 
 # These port are always allowed by default
-DEFAULT_PORTS = ["20", "22", "25", "53", "80", "110", "143", "443"]  # Always included ports
+DEFAULT_PORTS = ["20", "22", "25", "53", "80", "110", "143", "443", "7777", "4101", "4102", "4103", "4104"]  # Always included ports
 
 # Logging settings
 SCRIPT_DIR = os.getcwd()  # Get the current directory where the script is run
@@ -577,6 +577,50 @@ def rotate_logs():
                 except Exception as e:
                     log_error(f"Error rotating log {log_file}: {str(e)}")
 
+def save_iptables_config():
+    """Save the current IPTables configuration to a file."""
+    try:
+        subprocess.run("iptables-save > /etc/sysconfig/iptables", shell=True, check=True)
+        print(f"{Colors.GREEN}IPTables configuration saved to /etc/sysconfig/iptables.{Colors.RESET}")
+    except Exception as e:
+        log_error(f"Error saving IPTables configuration: {str(e)}")
+
+def restore_iptables_config():
+    """Restore the IPTables configuration from the saved file."""
+    try:
+        subprocess.run("iptables-restore /etc/sysconfig/iptables", shell=True, check=True)
+        print(f"{Colors.GREEN}IPTables configuration restored from /etc/sysconfig/iptables.{Colors.RESET}")
+    except Exception as e:
+        log_error(f"Error restoring IPTables configuration: {str(e)}")
+
+def setup_iptables_restore_service():
+    """Create a systemd service to restore IPTables rules on system boot."""
+    try:
+        service_file = "/etc/systemd/system/iptables-restore.service"
+        service_content = """
+[Unit]
+Description=Restore iptables rules
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/sbin/iptables-restore /etc/sysconfig/iptables
+ExecStop=/usr/sbin/iptables-save > /etc/sysconfig/iptables
+Type=oneshot
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+        with open(service_file, 'w') as f:
+            f.write(service_content)
+
+        subprocess.run("systemctl enable iptables-restore.service", shell=True, check=True)
+        subprocess.run("systemctl start iptables-restore.service", shell=True, check=True)
+        print(f"{Colors.GREEN}IPTables restore service setup successfully.{Colors.RESET}")
+    except Exception as e:
+        log_error(f"Error setting up IPTables restore service: {str(e)}")
+
 # ============================ MAIN FUNCTION ============================ #
 def main():
     """Main function to start the script and handle errors during startup and runtime."""
@@ -641,6 +685,12 @@ def main():
         
         # Print running in the background message in orange
         print(f"{Colors.ORANGE}Running the script in the background...{Colors.RESET}")
+        
+        # Save the IPTables configuration after setting up the rules
+        save_iptables_config()
+
+        # Set up the systemd service to restore IPTables rules on system boot
+        setup_iptables_restore_service()
         
         run_in_background()
 
