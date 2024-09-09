@@ -577,8 +577,22 @@ def rotate_logs():
                 except Exception as e:
                     log_error(f"Error rotating log {log_file}: {str(e)}")
 
+def flush_iptables_rules():
+    """Flush all existing IPTables rules and set default policies to DROP."""
+    try:
+        print(f"{Colors.YELLOW}Flushing all existing IPTables rules...{Colors.RESET}")
+        subprocess.run("iptables -F", shell=True, check=True)  # Flush all rules
+        subprocess.run("iptables -X", shell=True, check=True)  # Delete all user-defined chains
+        subprocess.run("iptables -Z", shell=True, check=True)  # Zero all packet and byte counters
+        subprocess.run("iptables -P INPUT DROP", shell=True, check=True)  # Set default policy to DROP
+        subprocess.run("iptables -P FORWARD DROP", shell=True, check=True)  # Set default policy to DROP
+        subprocess.run("iptables -P OUTPUT ACCEPT", shell=True, check=True)  # Allow all outgoing traffic
+        print(f"{Colors.GREEN}All IPTables rules flushed and default policies applied.{Colors.RESET}")
+    except Exception as e:
+        log_error(f"Error flushing IPTables rules: {str(e)}")
+
 def save_iptables_config():
-    """Save the current IPTables configuration to a file."""
+    """Save the current IPTables configuration and ensure it overwrites the previous one."""
     try:
         subprocess.run("iptables-save > /etc/sysconfig/iptables", shell=True, check=True)
         print(f"{Colors.GREEN}IPTables configuration saved to /etc/sysconfig/iptables.{Colors.RESET}")
@@ -588,13 +602,13 @@ def save_iptables_config():
 def restore_iptables_config():
     """Restore the IPTables configuration from the saved file."""
     try:
-        subprocess.run("iptables-restore /etc/sysconfig/iptables", shell=True, check=True)
+        subprocess.run("iptables-restore < /etc/sysconfig/iptables", shell=True, check=True)
         print(f"{Colors.GREEN}IPTables configuration restored from /etc/sysconfig/iptables.{Colors.RESET}")
     except Exception as e:
         log_error(f"Error restoring IPTables configuration: {str(e)}")
 
 def setup_iptables_restore_service():
-    """Create a systemd service to restore IPTables rules on system boot."""
+    """Create or update a systemd service to restore IPTables rules on system boot."""
     try:
         service_file = "/etc/systemd/system/iptables-restore.service"
         service_content = """
@@ -606,18 +620,21 @@ Wants=network-online.target
 [Service]
 ExecStart=/usr/sbin/iptables-restore /etc/sysconfig/iptables
 ExecStop=/usr/sbin/iptables-save > /etc/sysconfig/iptables
+ExecReload=/usr/sbin/iptables-restore /etc/sysconfig/iptables
 Type=oneshot
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
 """
-
         with open(service_file, 'w') as f:
             f.write(service_content)
 
+        # Reload systemd daemon and restart the iptables-restore service
+        subprocess.run("systemctl daemon-reload", shell=True, check=True)
         subprocess.run("systemctl enable iptables-restore.service", shell=True, check=True)
-        subprocess.run("systemctl start iptables-restore.service", shell=True, check=True)
-        print(f"{Colors.GREEN}IPTables restore service setup successfully.{Colors.RESET}")
+        subprocess.run("systemctl restart iptables-restore.service", shell=True, check=True)
+        print(f"{Colors.GREEN}IPTables restore service set up and restarted successfully.{Colors.RESET}")
     except Exception as e:
         log_error(f"Error setting up IPTables restore service: {str(e)}")
 
@@ -627,33 +644,39 @@ def main():
     try:
         display_welcome_message()
 
-        # First, kill existing scripts and install dependencies without showing progress
+        # First, kill existing scripts and install dependencies
+        print(f"{Colors.LIGHT_GREEN}Killing any existing script instances...{Colors.RESET}")
         kill_existing_script()
+        
+        print(f"{Colors.LIGHT_GREEN}Installing necessary dependencies...{Colors.RESET}")
         install_dependencies()
 
         global PROTECTION_LEVEL, ALLOWED_MARIADB_IPS, CT_PORTS, DDOS_THRESHOLD
         
-        # Collect inputs from the user without echoing yet
+        # Collect inputs from the user
         PROTECTION_LEVEL = show_menu()
+        print(f"{Colors.LIGHT_GREEN}Setting protection level to {Colors.BOLD_WHITE}{PROTECTION_LEVEL}{Colors.LIGHT_GREEN}.{Colors.RESET}")
 
         # Set the DDoS threshold based on the selected protection level
         DDOS_THRESHOLD = DDOS_THRESHOLDS[PROTECTION_LEVEL]
+        print(f"{Colors.LIGHT_GREEN}DDoS connection threshold set to {Colors.BOLD_WHITE}{DDOS_THRESHOLD}{Colors.LIGHT_GREEN} connections.{Colors.RESET}")
 
         # Collect allowed MariaDB IPs and ports
         ALLOWED_MARIADB_IPS = get_allowed_mariadb_ips()
-        CT_PORTS = get_allowed_ports()
-
-        # After collecting all inputs, echo the steps in light green and numbers in bold white
-        print(f"\n{Colors.LIGHT_GREEN}Setting DDoS threshold to {Colors.BOLD_WHITE}{DDOS_THRESHOLD}{Colors.LIGHT_GREEN} connections for protection level {Colors.BOLD_WHITE}{PROTECTION_LEVEL}.{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Allowed MariaDB IP addresses: {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
-        print(f"{Colors.LIGHT_GREEN}Allowed ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
-        
-        # Now proceed with the rest of the steps
+
+        CT_PORTS = get_allowed_ports()
+        print(f"{Colors.LIGHT_GREEN}Allowed ports for traffic: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
+
+        # Flush IPTables rules and apply new settings
+        print(f"{Colors.LIGHT_GREEN}Flushing existing IPTables rules...{Colors.RESET}")
+        flush_iptables_rules()
+
+        # Apply protection level and setup IPTables
         print(f"{Colors.LIGHT_GREEN}Applying protection level {Colors.BOLD_WHITE}{PROTECTION_LEVEL}{Colors.LIGHT_GREEN} settings...{Colors.RESET}")
         apply_protection_level(PROTECTION_LEVEL, CT_PORTS)
 
-        # Run IPTables setup only once here, right after all inputs are collected
-        print(f"{Colors.LIGHT_GREEN}Flushing existing IPTables rules...{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Setting up IPTables rules...{Colors.RESET}")
         setup_iptables()
 
         # IPTables setup details in light green with numbers in bold white
@@ -687,11 +710,15 @@ def main():
         print(f"{Colors.ORANGE}Running the script in the background...{Colors.RESET}")
         
         # Save the IPTables configuration after setting up the rules
+        print(f"{Colors.LIGHT_GREEN}Saving IPTables configuration...{Colors.RESET}")
         save_iptables_config()
 
         # Set up the systemd service to restore IPTables rules on system boot
+        print(f"{Colors.LIGHT_GREEN}Setting up IPTables restore service...{Colors.RESET}")
         setup_iptables_restore_service()
-        
+
+        # Start the background process
+        print(f"{Colors.LIGHT_GREEN}Running the script in the background...{Colors.RESET}")
         run_in_background()
 
         # Display the final success message before starting threads
@@ -719,7 +746,7 @@ def main():
             time.sleep(3600)  # Check log size every hour
     
     except Exception as e:
-        print("An error occurred in the main function.")
+        print(f"{Colors.RED}An error occurred in the main function.{Colors.RESET}")
         log_error(f"Error in main: {str(e)}")
 
 if __name__ == "__main__":
