@@ -6,6 +6,9 @@ from collections import defaultdict
 import psutil
 import re
 import math
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # ============================ CONFIGURATION ============================ #
 # Protection Level Configuration (1 = lenient, 6 = maximum security)
@@ -184,6 +187,91 @@ for log_file in [BLOCKED_IP_LOG, ATTEMPTED_CONNECTIONS_LOG, DDOS_MONITOR_LOG, ER
 
 blocked_ips = defaultdict(int)
 failed_attempts = defaultdict(int)
+
+# Email configuration
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
+SENDER_EMAIL = "aphelionlc.status@gmail.com"
+SENDER_PASSWORD = "rucrdxslwkkzmkcn"
+RECIPIENT_EMAILS = ["williamperez1988@hotmail.com", "lewisallum11@gmail.com"]
+
+# ============================ EMAIL FUNCTION ============================ #
+def send_email(subject, message):
+    try:
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+
+        msg = MIMEMultipart()
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = ', '.join(RECIPIENT_EMAILS)
+        msg['Subject'] = subject
+
+        msg.attach(MIMEText(message, 'html'))
+
+        server.sendmail(SENDER_EMAIL, RECIPIENT_EMAILS, msg.as_string())
+        server.quit()
+        print("Email sent successfully.")
+    except Exception as e:
+        print("Error sending email:", str(e))
+
+# ============================ MONITOR LOGS FOR EMAIL ============================ #
+def monitor_ddos_log():
+    """Check DDoS-Monitor.log for new DDoS activity and send email if detected."""
+    ddos_log_path = os.path.join(SECURITY_DIR, "DDoS-Monitor.log")
+    last_position = 0
+    if os.path.exists(ddos_log_path):
+        last_position = os.path.getsize(ddos_log_path)
+        
+    while True:
+        time.sleep(300)  # Check every 5 minutes
+        with open(ddos_log_path, 'r') as ddos_log:
+            ddos_log.seek(last_position)
+            new_lines = ddos_log.readlines()
+            last_position = ddos_log.tell()
+            
+            for line in new_lines:
+                if "Potential DDoS attack" in line:
+                    email_subject = "DDoS Activity Detected on Your Server"
+                    email_message = f"""
+                    <html>
+                    <body>
+                    <h2>Dear Admin,</h2>
+                    <p>We detected a potential DDoS attack on your server:</p>
+                    <p><strong>{line}</strong></p>
+                    <p>Best regards,<br>Aphelion LC Security System</p>
+                    </body>
+                    </html>
+                    """
+                    send_email(email_subject, email_message)
+
+def monitor_level_change_log():
+    """Check level_change.log for any protection level changes and send email if detected."""
+    level_change_log_path = os.path.join(SECURITY_DIR, "level_change.log")
+    last_position = 0
+    if os.path.exists(level_change_log_path):
+        last_position = os.path.getsize(level_change_log_path)
+        
+    while True:
+        time.sleep(300)  # Check every 5 minutes
+        with open(level_change_log_path, 'r') as level_log:
+            level_log.seek(last_position)
+            new_lines = level_log.readlines()
+            last_position = level_log.tell()
+            
+            for line in new_lines:
+                email_subject = "Protection Level Changed on Your Server"
+                email_message = f"""
+                <html>
+                <body>
+                <h2>Dear Admin,</h2>
+                <p>The protection level on your server has changed:</p>
+                <p><strong>{line}</strong></p>
+                <p>Best regards,<br>Aphelion LC Security System</p>
+                </body>
+                </html>
+                """
+                send_email(email_subject, email_message)
 
 # ============================ COLOR CODES ============================ #
 class Colors:
@@ -687,6 +775,9 @@ WantedBy=multi-user.target
 def main():
     """Main function to start the script and handle errors during startup and runtime."""
     try:
+        # Declare global variables at the beginning
+        global PROTECTION_LEVEL, ALLOWED_MARIADB_IPS, CT_PORTS, DDOS_THRESHOLD, INITIAL_PROTECTION_LEVEL, CURRENT_PROTECTION_LEVEL, suspicious_activity_count
+
         display_welcome_message()
 
         # First, kill existing scripts and install dependencies
@@ -696,8 +787,6 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Installing necessary dependencies...{Colors.RESET}")
         install_dependencies()
 
-        global PROTECTION_LEVEL, ALLOWED_MARIADB_IPS, CT_PORTS, DDOS_THRESHOLD, INITIAL_PROTECTION_LEVEL, CURRENT_PROTECTION_LEVEL, suspicious_activity_count
-        
         # Collect inputs from the user
         PROTECTION_LEVEL = show_menu()
         INITIAL_PROTECTION_LEVEL = PROTECTION_LEVEL
@@ -755,9 +844,6 @@ def main():
         # Print IPTables rules applied message in orange
         print(f"{Colors.ORANGE}IPTables rules applied successfully.{Colors.RESET}")
         
-        # Print running in the background message in orange
-        print(f"{Colors.ORANGE}Running the script in the background...{Colors.RESET}")
-        
         # Save the IPTables configuration after setting up the rules
         print(f"{Colors.LIGHT_GREEN}Saving IPTables configuration...{Colors.RESET}")
         save_iptables_config()
@@ -767,8 +853,25 @@ def main():
         setup_iptables_restore_service()
 
         # Start the background process
-        print(f"{Colors.LIGHT_GREEN}Running the script in the background...{Colors.RESET}")
         run_in_background()
+
+        # Send an email to notify that the script has started
+        email_subject = "DDoS Protection Script Started"
+        email_message = f"""
+        <html>
+        <body>
+        <h2>Dear Admin,</h2>
+        <p>Your DDoS protection script has started successfully on the server:</p>
+        <ul>
+            <li><strong>Protection Level:</strong> {PROTECTION_LEVEL}</li>
+            <li><strong>Allowed MariaDB IPs:</strong> {', '.join(ALLOWED_MARIADB_IPS)}</li>
+            <li><strong>Allowed Ports:</strong> {', '.join(CT_PORTS)}</li>
+        </ul>
+        <p>Best regards,<br>Your Security System</p>
+        </body>
+        </html>
+        """
+        send_email(email_subject, email_message)
 
         # Automated protection level adjustment based on activity  
         print(f"{Colors.ORANGE}Protection Upgrade Automation ... {Colors.RED}Active!{Colors.RESET}")
@@ -780,9 +883,18 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Starting DDoS monitoring thread...{Colors.RESET}")
         ddos_monitor_thread = threading.Thread(target=monitor_ddos)
 
-        print(f"{Colors.LIGHT_GREEN}Starting both monitoring threads...{Colors.RESET}")
+        # Start monitoring threads for DDoS and level change logs
+        print(f"{Colors.LIGHT_GREEN}Starting DDoS log monitoring thread...{Colors.RESET}")
+        ddos_log_thread = threading.Thread(target=monitor_ddos_log)
+
+        print(f"{Colors.LIGHT_GREEN}Starting level change log monitoring thread...{Colors.RESET}")
+        level_change_log_thread = threading.Thread(target=monitor_level_change_log)
+
+        print(f"{Colors.LIGHT_GREEN}Starting all monitoring threads...{Colors.RESET}")
         log_monitor_thread.start()
         ddos_monitor_thread.start()
+        ddos_log_thread.start()
+        level_change_log_thread.start()
         
         # Final message
         print(f"{Colors.ORANGE}Script is running in the background with PID {os.getpid()}. Exiting terminal.{Colors.RESET}")
