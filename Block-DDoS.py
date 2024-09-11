@@ -143,12 +143,12 @@ PROTECTION_LEVELS = {
 
 # Define DDoS thresholds for each protection level
 DDOS_THRESHOLDS = {
-    1: 300,  # Lower thresholds for testing purposes
-    2: 250,
-    3: 200,
-    4: 180,
-    5: 150,
-    6: 100   # Will block after 2 connections for maximum security level
+    1: 100,  # Lenient threshold for lower protection levels
+    2: 90,
+    3: 85,
+    4: 80,
+    5: 75,
+    6: 70   # Maximum security: block after 70 connections
 }
 
 # Initial variables
@@ -159,7 +159,7 @@ SUSPICIOUS_ACTIVITY_THRESHOLD = 3  # Number of DDoS triggers before upgrading le
 
 # Empty allowed IPs and ports (will be populated by user input)
 ALLOWED_MARIADB_IPS = []
-DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.117.116.141", "80.194.10.67"]  # Always included
+DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.117.116.141", "80.194.10.67", "185.62.188.4"]  # Always included
 CT_PORTS = []
 
 # Add your server's IP here
@@ -176,13 +176,14 @@ ATTEMPTED_CONNECTIONS_LOG = os.path.join(SECURITY_DIR, "connection_attempts.log"
 DDOS_MONITOR_LOG = os.path.join(SECURITY_DIR, "DDoS-Monitor.log")
 ERROR_LOG = os.path.join(SECURITY_DIR, "error.log")
 LEVEL_CHANGE_LOG = os.path.join(SECURITY_DIR, "level_change.log")
+CONNECTION_LOG = os.path.join(SECURITY_DIR, "connections_per_ip.log")
 
 # Ensure log directory exists
 if not os.path.exists(SECURITY_DIR):
     os.makedirs(SECURITY_DIR)
 
 # Ensure log files exist
-for log_file in [BLOCKED_IP_LOG, ATTEMPTED_CONNECTIONS_LOG, DDOS_MONITOR_LOG, ERROR_LOG, LEVEL_CHANGE_LOG]:
+for log_file in [BLOCKED_IP_LOG, ATTEMPTED_CONNECTIONS_LOG, DDOS_MONITOR_LOG, ERROR_LOG, LEVEL_CHANGE_LOG, CONNECTION_LOG]:
     open(log_file, 'a').close()
 
 blocked_ips = defaultdict(int)
@@ -236,10 +237,10 @@ def monitor_ddos_log():
                     email_message = f"""
                     <html>
                     <body>
-                    <h2>Dear Admin,</h2>
-                    <p>We detected a potential DDoS attack on your server:</p>
+                    <h2>Dear Admins,</h2>
+                    <p>We detected a potential DDoS attack on Phoenix LC server:</p>
                     <p><strong>{line}</strong></p>
-                    <p>Best regards,<br>Aphelion LC Security System</p>
+                    <p>Best regards,<br>Block DDoS Automated System</p>
                     </body>
                     </html>
                     """
@@ -264,10 +265,10 @@ def monitor_level_change_log():
                 email_message = f"""
                 <html>
                 <body>
-                <h2>Dear Admin,</h2>
-                <p>The protection level on your server has changed:</p>
+                <h2>Dear Admins,</h2>
+                <p>The protection level on Phoenix LC server has changed:</p>
                 <p><strong>{line}</strong></p>
-                <p>Best regards,<br>Aphelion LC Security System</p>
+                <p>Best regards,<br>Block DDoS Automated System</p>
                 </body>
                 </html>
                 """
@@ -694,7 +695,7 @@ def extract_ip_from_log(log_line):
 
 def rotate_logs():
     """Rotate logs when they exceed 100MB, delete and recreate them."""
-    log_files = [BLOCKED_IP_LOG, ATTEMPTED_CONNECTIONS_LOG, DDOS_MONITOR_LOG]
+    log_files = [BLOCKED_IP_LOG, ATTEMPTED_CONNECTIONS_LOG, DDOS_MONITOR_LOG, CONNECTION_LOG]
 
     # 100 MB threshold for logs
     MAX_LOG_SIZE = 100 * 1024 * 1024  # 100 MB in bytes
@@ -770,6 +771,38 @@ WantedBy=multi-user.target
         print(f"{Colors.GREEN}IPTables restore service set up and restarted successfully.{Colors.RESET}")
     except Exception as e:
         log_error(f"Error setting up IPTables restore service: {str(e)}")
+
+
+def monitor_connections_per_ip():
+    """Monitor the number of connections per IP and log them."""
+    try:
+        while True:
+            # Get the current connections using netstat
+            result = subprocess.run(["netstat", "-ntu"], stdout=subprocess.PIPE, universal_newlines=True)
+            connections = result.stdout.splitlines()
+
+            connection_count = defaultdict(int)
+
+            # Process the output to count connections for each IP
+            for line in connections:
+                if "ESTABLISHED" in line or "SYN_SENT" in line:
+                    ip = line.split()[4].split(':')[0]  # Extract the IP address
+                    if ip not in WHITELISTED_IPS:      # Exclude whitelisted IPs
+                        connection_count[ip] += 1
+
+            # Log the connection counts per IP
+            with open(CONNECTION_LOG, 'a') as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Connection counts per IP:\n")
+                for ip, count in connection_count.items():
+                    f.write(f"  {ip}: {count} connections\n")
+
+            # Log rotation if needed
+            rotate_logs()
+
+            # Wait for the next check (e.g., every 5 minutes)
+            time.sleep(300)
+    except Exception as e:
+        log_error(f"Error monitoring connections per IP: {str(e)}")
 
 # ============================ MAIN FUNCTION ============================ #
 def main():
@@ -860,14 +893,14 @@ def main():
         email_message = f"""
         <html>
         <body>
-        <h2>Dear Admin,</h2>
-        <p>Your DDoS protection script has started successfully on the server:</p>
+        <h2>Dear Admins,</h2>
+        <p>Block DDoS Automated script has started successfully on Phoenix LC server:</p>
         <ul>
             <li><strong>Protection Level:</strong> {PROTECTION_LEVEL}</li>
             <li><strong>Allowed MariaDB IPs:</strong> {', '.join(ALLOWED_MARIADB_IPS)}</li>
             <li><strong>Allowed Ports:</strong> {', '.join(CT_PORTS)}</li>
         </ul>
-        <p>Best regards,<br>Your Security System</p>
+        <p>Best regards,<br>Block DDoS Automated System</p>
         </body>
         </html>
         """
@@ -890,11 +923,15 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Starting level change log monitoring thread...{Colors.RESET}")
         level_change_log_thread = threading.Thread(target=monitor_level_change_log)
 
+        print(f"{Colors.LIGHT_GREEN}Starting connection monitoring thread...{Colors.RESET}")
+        connection_monitor_thread = threading.Thread(target=monitor_connections_per_ip)
+
         print(f"{Colors.LIGHT_GREEN}Starting all monitoring threads...{Colors.RESET}")
         log_monitor_thread.start()
-        ddos_monitor_thread.start()
+        ddos_monitor_thread.start()  # DDoS monitoring thread
         ddos_log_thread.start()
         level_change_log_thread.start()
+        connection_monitor_thread.start()
         
         # Final message
         print(f"{Colors.ORANGE}Script is running in the background with PID {os.getpid()}. Exiting terminal.{Colors.RESET}")
@@ -903,22 +940,10 @@ def main():
         print(f"================================================================================================={Colors.RESET}")
         
         while True:
-            # Monitor for suspicious activity
-            suspicious_activity_detected = monitor_ddos()  # Assume this function returns a boolean for activity detection
-
-            if suspicious_activity_detected:
-                suspicious_activity_count += 1
-                if suspicious_activity_count >= SUSPICIOUS_ACTIVITY_THRESHOLD and CURRENT_PROTECTION_LEVEL < 6:
-                    print(f"{Colors.LIGHT_RED}Suspicious activity detected! Upgrading protection level...{Colors.RESET}")
-                    adjust_protection_level("upgrade")
-                    suspicious_activity_count = 0  # Reset count after upgrading
-            else:
-                if CURRENT_PROTECTION_LEVEL > INITIAL_PROTECTION_LEVEL:
-                    print(f"{Colors.LIGHT_GREEN}DDoS activity subsided. Downgrading protection level...{Colors.RESET}")
-                    adjust_protection_level("downgrade")
-
+            # Here, we handle only log rotation or other background tasks
             rotate_logs()
-            time.sleep(DDOS_MONITOR_INTERVAL)  # Check again after the interval            
+            time.sleep(DDOS_MONITOR_INTERVAL)  # Continue rotating logs and any other maintenance tasks
+            
 
     except Exception as e:
         print(f"{Colors.RED}An error occurred in the main function.{Colors.RESET}")
