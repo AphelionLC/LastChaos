@@ -159,7 +159,7 @@ SUSPICIOUS_ACTIVITY_THRESHOLD = 3  # Number of DDoS triggers before upgrading le
 
 # Empty allowed IPs and ports (will be populated by user input)
 ALLOWED_MARIADB_IPS = []
-DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.117.116.141", "80.194.10.67", "185.62.188.4"]  # Always included
+DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.116.74.78", "80.194.10.67", "185.62.188.4"]  # Always included
 CT_PORTS = []
 
 # Add your server's IP here
@@ -170,7 +170,7 @@ DEFAULT_PORTS = ["20", "22", "25", "53", "80", "110", "143", "443"]  # Always in
 
 # Log files
 SCRIPT_DIR = os.getcwd()
-SECURITY_DIR = os.path.join(SCRIPT_DIR, "1-Security-Bot")
+SECURITY_DIR = os.path.join(SCRIPT_DIR, "Security Logs")
 BLOCKED_IP_LOG = os.path.join(SECURITY_DIR, "blocked_ips.log")
 ATTEMPTED_CONNECTIONS_LOG = os.path.join(SECURITY_DIR, "connection_attempts.log")
 DDOS_MONITOR_LOG = os.path.join(SECURITY_DIR, "DDoS-Monitor.log")
@@ -225,7 +225,7 @@ def monitor_ddos_log():
         last_position = os.path.getsize(ddos_log_path)
         
     while True:
-        time.sleep(300)  # Check every 5 minutes
+        time.sleep(120)  # Check every 2 minutes
         with open(ddos_log_path, 'r') as ddos_log:
             ddos_log.seek(last_position)
             new_lines = ddos_log.readlines()
@@ -254,7 +254,7 @@ def monitor_level_change_log():
         last_position = os.path.getsize(level_change_log_path)
         
     while True:
-        time.sleep(300)  # Check every 5 minutes
+        time.sleep(120)  # Check every 2 minutes
         with open(level_change_log_path, 'r') as level_log:
             level_log.seek(last_position)
             new_lines = level_log.readlines()
@@ -332,7 +332,7 @@ def adjust_protection_level(activity):
 
     elif activity == "downgrade" and CURRENT_PROTECTION_LEVEL > INITIAL_PROTECTION_LEVEL:
         old_level = CURRENT_PROTECTION_LEVEL
-        CURRENT_PROTECTION_LEVEL -= 1
+        CURRENT_PROTECTION_LEVEL = INITIAL_PROTECTION_LEVEL
         print(f"{Colors.LIGHT_GREEN}Downgrading protection level to {Colors.BOLD_WHITE}{CURRENT_PROTECTION_LEVEL}{Colors.RESET} due to lower activity.")
         
         # Flush and reapply rules for the downgraded level
@@ -772,35 +772,85 @@ WantedBy=multi-user.target
     except Exception as e:
         log_error(f"Error setting up IPTables restore service: {str(e)}")
 
-
 def monitor_connections_per_ip():
-    """Monitor the number of connections per IP and log them."""
+    """Monitor and log the foreign IPs connected to user-specified local ports, with channel labels and total connections."""
     try:
         while True:
             # Get the current connections using netstat
             result = subprocess.run(["netstat", "-ntu"], stdout=subprocess.PIPE, universal_newlines=True)
             connections = result.stdout.splitlines()
 
-            connection_count = defaultdict(int)
+            connection_count = defaultdict(set)  # Use a set to ensure unique ports per IP
+            channel_totals = { "CH-1": 0, "CH-2": 0, "CH-3": 0, "CH-4": 0 }  # To store total connections per channel
+            overall_total_connections = 0  # To store the overall total connections
 
-            # Process the output to count connections for each IP
+            # Process the output to capture connections on user-specified local ports
             for line in connections:
                 if "ESTABLISHED" in line or "SYN_SENT" in line:
-                    ip = line.split()[4].split(':')[0]  # Extract the IP address
-                    if ip not in WHITELISTED_IPS:      # Exclude whitelisted IPs
-                        connection_count[ip] += 1
+                    # Split the line by spaces to extract relevant info
+                    parts = line.split()
+                    local_address = parts[3]  # Local Address (example: 145.239.1.51:4585)
+                    foreign_address = parts[4]  # Foreign Address (example: 79.117.116.141:23323)
+                    
+                    # Extract the local port
+                    local_ip, local_port = local_address.rsplit(':', 1)
 
-            # Log the connection counts per IP
+                    # Check if the local port is in the user-specified ports
+                    if local_port in CT_PORTS:
+                        ip = foreign_address.split(':')[0]  # Extract the IP part of the foreign address
+                        if ip not in WHITELISTED_IPS:  # Exclude whitelisted IPs
+                            connection_count[ip].add(local_port)  # Use set to avoid duplicate ports
+
+                            # Map the ports to their respective channels and count totals
+                            if local_port == '4101':
+                                channel_totals["CH-1"] += 1
+                            elif local_port == '4102':
+                                channel_totals["CH-2"] += 1
+                            elif local_port == '4103':
+                                channel_totals["CH-3"] += 1
+                            elif local_port == '4104':
+                                channel_totals["CH-4"] += 1
+
+            # Calculate the overall total connections
+            overall_total_connections = sum(channel_totals.values())
+
+            # Log the foreign IPs connected to user-specified local ports
             with open(CONNECTION_LOG, 'a') as f:
-                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Connection counts per IP:\n")
-                for ip, count in connection_count.items():
-                    f.write(f"  {ip}: {count} connections\n")
+                if connection_count:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Foreign IPs connected to user-specified local ports:\n")
+                    for ip, ports in connection_count.items():
+                        port_labels = []
+                        for port in sorted(ports):
+                            # Add channel labels based on port
+                            if port == '4101':
+                                port_labels.append(f"[{port} CH-1]")
+                            elif port == '4102':
+                                port_labels.append(f"[{port} CH-2]")
+                            elif port == '4103':
+                                port_labels.append(f"[{port} CH-3]")
+                            elif port == '4104':
+                                port_labels.append(f"[{port} CH-4]")
+                            else:
+                                port_labels.append(f"[{port}]")  # For other ports, just show the port number
+
+                        total_connections = len(ports)  # Calculate total unique connections (ports)
+                        f.write(f"  {ip}: connected to local ports {', '.join(port_labels)} (Total connections: {total_connections})\n")
+                    
+                    # Log the total per channel
+                    f.write(f"\nTotal connections per channel:\n")
+                    f.write(f"  CH-1 (4101): {channel_totals['CH-1']} connections\n")
+                    f.write(f"  CH-2 (4102): {channel_totals['CH-2']} connections\n")
+                    f.write(f"  CH-3 (4103): {channel_totals['CH-3']} connections\n")
+                    f.write(f"  CH-4 (4104): {channel_totals['CH-4']} connections\n")
+                    f.write(f"\nOverall total connections: {overall_total_connections}\n\n")
+                else:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - No foreign IPs connected to user-specified ports.\n")
 
             # Log rotation if needed
             rotate_logs()
 
-            # Wait for the next check (e.g., every 5 minutes)
-            time.sleep(300)
+            # Wait for the next check (e.g., every 3 minutes)
+            time.sleep(180)
     except Exception as e:
         log_error(f"Error monitoring connections per IP: {str(e)}")
 
