@@ -143,23 +143,13 @@ PROTECTION_LEVELS = {
 
 # Define DDoS thresholds for each protection level
 DDOS_THRESHOLDS = {
-    1: 15,  # Lenient threshold for lower protection levels
-    2: 12,
-    3: 10,
-    4: 8,
-    5: 7,
-    6: 5   # Maximum security: block after 70 connections
+    1: 100,  # Lenient threshold for lower protection levels
+    2: 90,
+    3: 85,
+    4: 80,
+    5: 75,
+    6: 70   # Maximum security: block after 70 connections
 }
-
-# Define DDoS thresholds for each protection level
-#DDOS_THRESHOLDS = {
-#    1: 100,  # Lenient threshold for lower protection levels
-#    2: 90,
-#    3: 85,
-#    4: 80,
-#    5: 75,
-#    6: 70   # Maximum security: block after 70 connections
-#}
 
 # Initial variables
 INITIAL_PROTECTION_LEVEL = None  # Store initial protection level set by the user
