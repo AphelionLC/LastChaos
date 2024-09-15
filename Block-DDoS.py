@@ -143,13 +143,23 @@ PROTECTION_LEVELS = {
 
 # Define DDoS thresholds for each protection level
 DDOS_THRESHOLDS = {
-    1: 100,  # Lenient threshold for lower protection levels
-    2: 90,
-    3: 85,
-    4: 80,
-    5: 75,
-    6: 70   # Maximum security: block after 70 connections
+    1: 15,  # Lenient threshold for lower protection levels
+    2: 12,
+    3: 10,
+    4: 8,
+    5: 7,
+    6: 5   # Maximum security: block after 70 connections
 }
+
+# Define DDoS thresholds for each protection level
+#DDOS_THRESHOLDS = {
+#    1: 100,  # Lenient threshold for lower protection levels
+#    2: 90,
+#    3: 85,
+#    4: 80,
+#    5: 75,
+#    6: 70   # Maximum security: block after 70 connections
+#}
 
 # Initial variables
 INITIAL_PROTECTION_LEVEL = None  # Store initial protection level set by the user
@@ -194,7 +204,7 @@ SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER_EMAIL = "aphelionlc.status@gmail.com"
 SENDER_PASSWORD = "rucrdxslwkkzmkcn"
-RECIPIENT_EMAILS = ["williamperez1988@hotmail.com", "lewisallum11@gmail.com"]
+RECIPIENT_EMAILS = ["williamperez1988@hotmail.com"] #, "lewisallum11@gmail.com"]
 
 # ============================ EMAIL FUNCTION ============================ #
 def send_email(subject, message):
@@ -580,32 +590,133 @@ def monitor_logs():
                                     block_ip(ip, "Failed SSH attempts")
             time.sleep(LOG_MONITOR_INTERVAL)
     except Exception as e:
-        log_error(f"Error monitoring logs: {str(e)}")
+        log_error(f"Error monitoring logs: {str(e)}")  
 
 # ============================ MONITOR DDoS ATTACKS ============================ #
 def monitor_ddos():
-    """Monitor for potential DDoS attacks by analyzing connections using netstat and adjust protection level."""
+    """Monitor for potential DDoS attacks by analyzing connections using netstat and ss, and adjust protection level."""
     global suspicious_activity_count
+
+    server_ip = "145.239.1.51"  # Server's own IP to exclude
+
     try:
         while True:
             log_ddos_monitor("Checking for DDoS activity...")
 
-            result = subprocess.run(["netstat", "-ant"], stdout=subprocess.PIPE, universal_newlines=True)
-            connections = result.stdout.splitlines()
+            # Define thresholds and ensure they are integers
+            syn_threshold = int(PROTECTION_LEVELS[CURRENT_PROTECTION_LEVEL]['SYNFLOOD_RATE'].split('/')[0])
+            udp_threshold = 500  # UDP flood threshold
+            icmp_threshold = 100  # ICMP flood threshold
+            tcp_time_wait_threshold = 200  # TCP connection flood threshold (TIME_WAIT/CLOSE_WAIT)
+            threshold_display_percentage = 0.7  # Only show if threshold is reached at least 70%
 
-            connection_count = defaultdict(int)
-            for line in connections:
-                if "ESTABLISHED" in line:
-                    ip = line.split()[4].split(':')[0]
-                    connection_count[ip] += 1
+            # Monitor TCP (ESTABLISHED) with netstat
+            result = subprocess.run(["netstat", "-ant"], stdout=subprocess.PIPE, universal_newlines=True)
+            tcp_connections = result.stdout.splitlines()
+
+            tcp_established_count = defaultdict(int)
+            syn_recv_count = defaultdict(int)
+
+            for line in tcp_connections:
+                try:
+                    split_line = line.split()
+                    if len(split_line) >= 5 and "ESTABLISHED" in split_line[-1]:
+                        ip = split_line[4].split(':')[0]
+                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                            tcp_established_count[ip] += 1
+                    elif len(split_line) >= 5 and "SYN_RECV" in split_line[-1]:
+                        ip = split_line[4].split(':')[0]
+                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                            syn_recv_count[ip] += 1
+                except IndexError as e:
+                    log_error(f"Error processing TCP line: {line} - {str(e)}")
+                    continue
+
+            # Monitor UDP and ICMP connections with ss
+            udp_result = subprocess.run(["ss", "-u", "-a"], stdout=subprocess.PIPE, universal_newlines=True)
+            icmp_result = subprocess.run(["ss", "-i", "-a"], stdout=subprocess.PIPE, universal_newlines=True)
+
+            udp_connections = udp_result.stdout.splitlines()
+            icmp_connections = icmp_result.stdout.splitlines()
+
+            udp_count = defaultdict(int)
+            icmp_count = defaultdict(int)
+
+            # Process UDP connections
+            for line in udp_connections:
+                try:
+                    split_line = line.split()
+                    if len(split_line) >= 6 and "UNCONN" in split_line:
+                        ip = split_line[5].split(':')[0]
+                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                            udp_count[ip] += 1
+                except IndexError as e:
+                    log_error(f"Error processing UDP line: {line} - {str(e)}")
+                    continue
+
+            # Process ICMP connections
+            for line in icmp_connections:
+                try:
+                    split_line = line.split()
+                    if len(split_line) >= 6 and ("UNCONN" in split_line or "PING" in split_line):
+                        ip = split_line[5].split(':')[0]
+                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                            icmp_count[ip] += 1
+                except IndexError as e:
+                    log_error(f"Error processing ICMP line: {line} - {str(e)}")
+                    continue
 
             suspicious_activity_detected = False
-            for ip, count in connection_count.items():
-                if ip != "127.0.0.1" and count > DDOS_THRESHOLD:
-                    suspicious_activity_detected = True
-                    block_ip(ip, "Potential DDoS attack")
-                    log_ddos_monitor(f"Blocked IP {ip} for potential DDoS attack")
+            blocked_ips = []
 
+            # Function to log how close an IP is to reaching the DDoS threshold
+            def log_proximity(ip, count, threshold, attack_type):
+                percentage = (count / threshold) * 100
+                if percentage >= threshold_display_percentage * 100:
+                    log_ddos_monitor(f"{ip} - {attack_type} count: {count}, {percentage:.2f}% of the threshold ({threshold}).")
+                return percentage >= threshold_display_percentage * 100
+
+            # Check for excessive TCP ESTABLISHED Connections
+            for ip, count in tcp_established_count.items():
+                if log_proximity(ip, count, DDOS_THRESHOLD, "TCP ESTABLISHED"):
+                    if count > DDOS_THRESHOLD:
+                        suspicious_activity_detected = True
+                        block_ip(ip, "Potential DDoS attack (TCP ESTABLISHED connections exceeded)")
+                        log_ddos_monitor(f"Blocked IP {ip} for excessive TCP ESTABLISHED connections")
+                        blocked_ips.append(ip)
+
+            # Check for excessive SYN_RECV connections
+            for ip, count in syn_recv_count.items():
+                if log_proximity(ip, count, syn_threshold, "SYN_RECV"):
+                    if count > syn_threshold:
+                        suspicious_activity_detected = True
+                        block_ip(ip, "Potential SYN flood attack")
+                        log_ddos_monitor(f"Blocked IP {ip} for excessive SYN_RECV connections")
+                        blocked_ips.append(ip)
+
+            # Check for excessive UDP connections
+            for ip, count in udp_count.items():
+                if log_proximity(ip, count, udp_threshold, "UDP"):
+                    if count > udp_threshold:
+                        suspicious_activity_detected = True
+                        block_ip(ip, "Potential UDP flood attack")
+                        log_ddos_monitor(f"Blocked IP {ip} for excessive UDP connections")
+                        blocked_ips.append(ip)
+
+            # Check for excessive ICMP connections
+            for ip, count in icmp_count.items():
+                if log_proximity(ip, count, icmp_threshold, "ICMP"):
+                    if count > icmp_threshold:
+                        suspicious_activity_detected = True
+                        block_ip(ip, "Potential ICMP flood attack")
+                        log_ddos_monitor(f"Blocked IP {ip} for excessive ICMP connections")
+                        blocked_ips.append(ip)
+
+            # Blocked IPs summary
+            if blocked_ips:
+                log_ddos_monitor(f"Blocked IPs: {', '.join(blocked_ips)}")
+
+            # If suspicious activity is detected, take action
             if suspicious_activity_detected:
                 suspicious_activity_count += 1
                 print(f"Suspicious activity detected! Count: {suspicious_activity_count}")
@@ -613,14 +724,15 @@ def monitor_ddos():
                     adjust_protection_level("upgrade")
                     suspicious_activity_count = 0  # Reset count after upgrade
             else:
-                if suspicious_activity_count > 0:  # Reset the count if no suspicious activity is detected
-                    suspicious_activity_count -= 1
+                if suspicious_activity_count > 0:
+                    suspicious_activity_count -= 1  # Reset the count if no suspicious activity is detected
                 adjust_protection_level("downgrade")
 
             time.sleep(DDOS_MONITOR_INTERVAL)
+
     except Exception as e:
         log_error(f"Error monitoring DDoS: {str(e)}")
-        
+      
 def kill_existing_script():
     """Check if the script is already running and kill it if found."""
     try:
