@@ -141,15 +141,35 @@ PROTECTION_LEVELS = {
     }
 }
 
-# Define DDoS thresholds for each protection level
+#==============================================================================================================================
+
+# DDoS Threshold Configuration
 DDOS_THRESHOLDS = {
-    1: 100,  # Lenient threshold for lower protection levels
-    2: 90,
-    3: 85,
-    4: 80,
-    5: 75,
-    6: 70   # Maximum security: block after 70 connections
+    1: 30,  # Lenient
+    2: 25,
+    3: 20,
+    4: 18,
+    5: 16,
+    6: 15   # Maximum security
 }
+
+# This configuration defines the allowed number of simultaneous connections per IP address
+# for each DDoS protection level. The system monitors incoming connections from each IP,
+# and if an IP exceeds the threshold defined for the current protection level, it is flagged 
+# as suspicious, and appropriate actions (like blocking) are taken.
+
+#How It Works:
+
+# 1. The system monitors the number of connections each IP has to the server using tools 
+#    like netstat or ss.
+# 2. For each IP, the system checks if the number of connections exceeds the specified threshold 
+#    for the active protection level (from 1 to 6).
+# 3. If an IP exceeds the threshold for the active level, it is considered a potential DDoS threat, 
+#    and further actions such as blocking or upgrading the security level are performed.
+# 4. The lower the level, the more connections are allowed per IP; higher levels offer tighter 
+#    security with lower connection limits to mitigate potential DDoS attacks.
+
+#===============================================================================================================================
 
 # Initial variables
 INITIAL_PROTECTION_LEVEL = None  # Store initial protection level set by the user
