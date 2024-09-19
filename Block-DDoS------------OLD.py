@@ -14,142 +14,162 @@ from email.mime.multipart import MIMEMultipart
 # Protection Level Configuration (1 = lenient, 6 = maximum security)
 PROTECTION_LEVELS = {
     1: {
-        "description": "Lenient: Higher connection limits, fewer login attempt restrictions",  # General description
-        "SYNFLOOD_RATE": "1000/s",    # Rate limit for SYN flood protection (1000 packets per second)
-        "SYNFLOOD_BURST": "500",      # Burst limit for SYN flood protection (allows up to 500 packets in a short burst)
-        "CT_LIMIT": 5000,             # Maximum concurrent connections allowed (connection tracking limit)
-        "CT_BLOCK_TIME": "3600",      # Time (in seconds) to block an IP if it exceeds the connection limit (1 hour)
-        "LF_TRIGGER": 10,             # Number of failed login attempts before triggering an IP block
-        "LOG_MONITOR_INTERVAL": 60,   # Interval (in seconds) to monitor log files (check for failed login attempts)
-        "LF_DOS_LIMIT": 2000,         # Port flood protection limit: maximum allowed connections per second
-        "LF_DOS_INTERVAL": 200,       # Port flood protection burst: burst allowed for port flooding (up to 200 packets)
-        "DDOS_MONITOR_INTERVAL": 10,  # Interval (in seconds) to check for potential DDoS attacks (every 3 minutes)
-        "CONNLIMIT": 500,             # Maximum allowed connections per source IP before it is limited
-        "PORTFLOOD_BURST": 100,       # Maximum burst for incoming connections per port (prevents connection flooding)
-        "PORTFLOOD_INTERVAL": 60,     # Time interval for port flood monitoring (in seconds)
-        "ICMP_RATE": "1/s",           # Rate limit for ICMP (ping) packets (1 packet per second)
-        "UDP_LIMIT": "500/s",         # Rate limit for UDP packets to prevent UDP floods (500 packets per second)
-        "BLOCK_INVALID": True,        # Block invalid packets (packets with incorrect state or malformed)
-        "BLOCK_DNS": True,            # Block DNS traffic (prevents abuse of DNS services, blocks UDP port 53)
-        "RST_RATE": "5/s",            # Rate limit for RST (Reset) packets (5 RST packets per second)
-        "RST_BURST": "10"             # Burst limit for RST flood protection (allows up to 10 RST packets)
+        "description": "Lenient: Higher connection limits, fewer login attempt restrictions",
+        "SYNFLOOD_RATE": "700/s",  # Slightly increased SYN rate to allow more traffic
+        "SYNFLOOD_BURST": "350",   # Increased burst size
+        "CT_LIMIT": 35,            # Increased connection limit per IP
+        "CT_BLOCK_TIME": "1800",    # Block time remains the same (30 mins)
+        "LF_TRIGGER": 12,           # Increased failed login attempts allowed
+        "LOG_MONITOR_INTERVAL": 60, # Same log interval
+        "LF_DOS_LIMIT": 1300,       # Slightly higher DOS limit
+        "LF_DOS_INTERVAL": 130,     # Increased burst allowance
+        "DDOS_MONITOR_INTERVAL": 10,
+        "CONNLIMIT": 35,            # Increased connection limit
+        "PORTFLOOD_BURST": 70,      # Increased burst size for port flooding
+        "PORTFLOOD_INTERVAL": 60,   # Same interval
+        "ICMP_RATE": "1/s",
+        "UDP_LIMIT": "320/s",       # Increased UDP packet limit
+        "BLOCK_INVALID": True,
+        "BLOCK_DNS": True,
+        "RST_RATE": "6/s",          # Increased RST rate limit
+        "RST_BURST": "12"           # Increased RST burst size
     },
     2: {
         "description": "Moderate: Balanced protection between performance and security",
-        "SYNFLOOD_RATE": "500/s",
-        "SYNFLOOD_BURST": "300",
-        "CT_LIMIT": 3000,
-        "CT_BLOCK_TIME": "1800",
-        "LF_TRIGGER": 7,
+        "SYNFLOOD_RATE": "500/s",   # Slightly increased to allow more traffic
+        "SYNFLOOD_BURST": "250",
+        "CT_LIMIT": 28,             # Slightly increased
+        "CT_BLOCK_TIME": "1500",
+        "LF_TRIGGER": 8,            # More failed logins allowed
         "LOG_MONITOR_INTERVAL": 50,
-        "LF_DOS_LIMIT": 1500,
-        "LF_DOS_INTERVAL": 150,
+        "LF_DOS_LIMIT": 1100,       # Increased DOS limit
+        "LF_DOS_INTERVAL": 120,     # Increased burst
         "DDOS_MONITOR_INTERVAL": 10,
-        "CONNLIMIT": 300,
-        "PORTFLOOD_BURST": 80,
+        "CONNLIMIT": 28,            # Increased connection limit
+        "PORTFLOOD_BURST": 55,      # Increased burst size
         "PORTFLOOD_INTERVAL": 60,
         "ICMP_RATE": "1/s",
-        "UDP_LIMIT": "400/s",
+        "UDP_LIMIT": "270/s",       # Increased UDP limit
         "BLOCK_INVALID": True,
         "BLOCK_DNS": True,
-        "RST_RATE": "4/s",
-        "RST_BURST": "8"
+        "RST_RATE": "5/s",          # Increased RST limit
+        "RST_BURST": "10"
     },
     3: {
         "description": "Medium: Moderate connection limits and failed login restrictions",
-        "SYNFLOOD_RATE": "300/s",
-        "SYNFLOOD_BURST": "200",
-        "CT_LIMIT": 2000,
-        "CT_BLOCK_TIME": "1800",
-        "LF_TRIGGER": 5,
+        "SYNFLOOD_RATE": "280/s",
+        "SYNFLOOD_BURST": "180",
+        "CT_LIMIT": 22,             # Slightly more tolerant
+        "CT_BLOCK_TIME": "1200",
+        "LF_TRIGGER": 6,
         "LOG_MONITOR_INTERVAL": 40,
-        "LF_DOS_LIMIT": 1000,
-        "LF_DOS_INTERVAL": 100,
+        "LF_DOS_LIMIT": 800,        # Increased DOS limit
+        "LF_DOS_INTERVAL": 90,
         "DDOS_MONITOR_INTERVAL": 10,
-        "CONNLIMIT": 200,
-        "PORTFLOOD_BURST": 60,
+        "CONNLIMIT": 22,            # Increased limit
+        "PORTFLOOD_BURST": 45,      # Increased burst
         "PORTFLOOD_INTERVAL": 90,
         "ICMP_RATE": "1/s",
-        "UDP_LIMIT": "300/s",
+        "UDP_LIMIT": "230/s",       # Increased UDP limit
+        "BLOCK_INVALID": True,
+        "BLOCK_DNS": True,
+        "RST_RATE": "4/s",          # Increased RST rate
+        "RST_BURST": "7"
+    },
+    4: {
+        "description": "Strict: Lower connection limits, more frequent log monitoring",
+        "SYNFLOOD_RATE": "170/s",   # Increased SYN flood rate
+        "SYNFLOOD_BURST": "120",    # Increased burst
+        "CT_LIMIT": 17,             # Increased limit
+        "CT_BLOCK_TIME": "900",
+        "LF_TRIGGER": 4,            # More failed login attempts allowed
+        "LOG_MONITOR_INTERVAL": 30,
+        "LF_DOS_LIMIT": 650,        # Slightly higher DOS limit
+        "LF_DOS_INTERVAL": 65,      # Increased burst
+        "DDOS_MONITOR_INTERVAL": 10,
+        "CONNLIMIT": 17,            # Increased connection limit
+        "PORTFLOOD_BURST": 35,      # Increased burst size
+        "PORTFLOOD_INTERVAL": 120,
+        "ICMP_RATE": "1/s",
+        "UDP_LIMIT": "170/s",       # Increased UDP limit
         "BLOCK_INVALID": True,
         "BLOCK_DNS": True,
         "RST_RATE": "3/s",
         "RST_BURST": "6"
     },
-    4: {
-        "description": "Strict: Lower connection limits, more frequent log monitoring",
-        "SYNFLOOD_RATE": "150/s",
-        "SYNFLOOD_BURST": "100",
-        "CT_LIMIT": 1000,
-        "CT_BLOCK_TIME": "3600",
-        "LF_TRIGGER": 3,
-        "LOG_MONITOR_INTERVAL": 30,
-        "LF_DOS_LIMIT": 500,
-        "LF_DOS_INTERVAL": 50,
-        "DDOS_MONITOR_INTERVAL": 10,
-        "CONNLIMIT": 100,
-        "PORTFLOOD_BURST": 40,
-        "PORTFLOOD_INTERVAL": 120,
-        "ICMP_RATE": "1/s",
-        "UDP_LIMIT": "200/s",
-        "BLOCK_INVALID": True,
-        "BLOCK_DNS": True,
-        "RST_RATE": "2/s",
-        "RST_BURST": "5"
-    },
     5: {
         "description": "Very Strict: Very tight limits, minimal connection bursts allowed",
-        "SYNFLOOD_RATE": "100/s",
-        "SYNFLOOD_BURST": "50",
-        "CT_LIMIT": 500,
-        "CT_BLOCK_TIME": "7200",
-        "LF_TRIGGER": 2,
+        "SYNFLOOD_RATE": "120/s",
+        "SYNFLOOD_BURST": "60",     # Slightly increased burst
+        "CT_LIMIT": 12,             # Increased connection limit
+        "CT_BLOCK_TIME": "3600",
+        "LF_TRIGGER": 3,            # More failed login attempts allowed
         "LOG_MONITOR_INTERVAL": 20,
-        "LF_DOS_LIMIT": 300,
-        "LF_DOS_INTERVAL": 30,
+        "LF_DOS_LIMIT": 450,        # Increased DOS limit
+        "LF_DOS_INTERVAL": 45,      # Increased burst
         "DDOS_MONITOR_INTERVAL": 10,
-        "CONNLIMIT": 50,
-        "PORTFLOOD_BURST": 30,
+        "CONNLIMIT": 12,            # Slightly increased connection limit
+        "PORTFLOOD_BURST": 25,      # Increased burst size
         "PORTFLOOD_INTERVAL": 90,
         "ICMP_RATE": "1/s",
-        "UDP_LIMIT": "100/s",
+        "UDP_LIMIT": "120/s",       # Increased UDP limit
         "BLOCK_INVALID": True,
         "BLOCK_DNS": True,
-        "RST_RATE": "1/s",
-        "RST_BURST": "3"
+        "RST_RATE": "2/s",          # Slightly increased RST rate
+        "RST_BURST": "4"
     },
     6: {
         "description": "Maximum: Maximum security with ultra-tight restrictions",
-        "SYNFLOOD_RATE": "50/s",
-        "SYNFLOOD_BURST": "25",
-        "CT_LIMIT": 250,
+        "SYNFLOOD_RATE": "80/s",    # Increased SYN flood rate
+        "SYNFLOOD_BURST": "45",     # Increased burst size
+        "CT_LIMIT": 9,              # Increased connection limit slightly
         "CT_BLOCK_TIME": "14400",
-        "LF_TRIGGER": 1,
+        "LF_TRIGGER": 2,            # More failed login attempts allowed
         "LOG_MONITOR_INTERVAL": 10,
-        "LF_DOS_LIMIT": 200,
-        "LF_DOS_INTERVAL": 20,
+        "LF_DOS_LIMIT": 350,        # Increased DOS limit
+        "LF_DOS_INTERVAL": 35,      # Increased burst size
         "DDOS_MONITOR_INTERVAL": 10,
-        "CONNLIMIT": 25,
-        "PORTFLOOD_BURST": 20,
+        "CONNLIMIT": 9,             # Slightly more tolerant connection limit
+        "PORTFLOOD_BURST": 18,      # Increased burst size
         "PORTFLOOD_INTERVAL": 60,
         "ICMP_RATE": "1/s",
-        "UDP_LIMIT": "50/s",
+        "UDP_LIMIT": "80/s",        # Slightly increased UDP limit
         "BLOCK_INVALID": True,
         "BLOCK_DNS": True,
-        "RST_RATE": "1/s",
-        "RST_BURST": "2"
+        "RST_RATE": "1/s",          
+        "RST_BURST": "3"
     }
 }
 
-# Define DDoS thresholds for each protection level
+#==============================================================================================================================
+
+# DDoS Threshold Configuration
 DDOS_THRESHOLDS = {
-    1: 100,  # Lenient threshold for lower protection levels
-    2: 90,
-    3: 85,
-    4: 80,
-    5: 75,
-    6: 70   # Maximum security: block after 70 connections
+    1: 30,  # Lenient
+    2: 25,
+    3: 20,
+    4: 18,
+    5: 16,
+    6: 15   # Maximum security
 }
+
+# This configuration defines the allowed number of simultaneous connections per IP address
+# for each DDoS protection level. The system monitors incoming connections from each IP,
+# and if an IP exceeds the threshold defined for the current protection level, it is flagged 
+# as suspicious, and appropriate actions (like blocking) are taken.
+
+#How It Works:
+
+# 1. The system monitors the number of connections each IP has to the server using tools 
+#    like netstat or ss.
+# 2. For each IP, the system checks if the number of connections exceeds the specified threshold 
+#    for the active protection level (from 1 to 6).
+# 3. If an IP exceeds the threshold for the active level, it is considered a potential DDoS threat, 
+#    and further actions such as blocking or upgrading the security level are performed.
+# 4. The lower the level, the more connections are allowed per IP; higher levels offer tighter 
+#    security with lower connection limits to mitigate potential DDoS attacks.
+
+#===============================================================================================================================
 
 # Initial variables
 INITIAL_PROTECTION_LEVEL = None  # Store initial protection level set by the user
@@ -194,7 +214,7 @@ SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER_EMAIL = "aphelionlc.status@gmail.com"
 SENDER_PASSWORD = "rucrdxslwkkzmkcn"
-RECIPIENT_EMAILS = ["williamperez1988@hotmail.com", "lewisallum11@gmail.com"]
+RECIPIENT_EMAILS = ["williamperez1988@hotmail.com"] #, "lewisallum11@gmail.com"]
 
 # ============================ EMAIL FUNCTION ============================ #
 def send_email(subject, message):
@@ -539,6 +559,98 @@ def setup_iptables():
     except Exception as e:
         log_error(f"Error setting up iptables: {str(e)}")
 
+def prompt_block_countries():
+    """Prompt the user to block specific countries and return the list of blocked countries."""
+    BLOCKED_COUNTRIES = ['VN', 'IR', 'KP', 'CN', 'RU']  # Vietnam, Iran, North Korea, China, Russia
+    block_countries_input = input(f"{Colors.LIGHT_GREEN}Do you want to block traffic from the following countries: {Colors.BOLD_WHITE}{', '.join(BLOCKED_COUNTRIES)}{Colors.LIGHT_GREEN}? (y/n): {Colors.RESET}").strip().lower()
+
+    if block_countries_input == 'y':
+        # Proceed with blocking traffic from the specified countries
+        print(f"{Colors.LIGHT_GREEN}Proceeding to block traffic from the following countries: {Colors.BOLD_WHITE}{', '.join(BLOCKED_COUNTRIES)}{Colors.RESET}")
+        block_countries(BLOCKED_COUNTRIES)  # Apply block
+        return BLOCKED_COUNTRIES
+    elif block_countries_input == 'n':
+        print(f"{Colors.LIGHT_GREEN}Skipping country blocking as per user choice.{Colors.RESET}")
+        flush_countryblock_if_needed()  # Only flush if there are existing entries
+        return None
+    else:
+        print(f"{Colors.RED}Invalid input. Please enter 'y' for yes or 'n' for no.{Colors.RESET}")
+        return None
+
+
+def block_countries(countries):
+    """
+    Block traffic from specified countries using ipset and iptables.
+    :param countries: List of ISO country codes (e.g., ['CN', 'RU'] for China and Russia)
+    """
+    try:
+        if not countries:
+            print(f"{Colors.YELLOW}No countries to block.{Colors.RESET}")
+            return
+
+        # Flush and apply new blocklists
+        flush_countryblock()
+
+        for country in countries:
+            zone_file = f"/tmp/{country}.zone"
+            if os.path.exists(zone_file):
+                print(f"{Colors.GREEN}Adding IP ranges for country {country} from {zone_file} to blocklist...{Colors.RESET}")
+                ipset_add_command = f"for ip in $(cat {zone_file}); do ipset add countryblock $ip; done"
+                subprocess.run(ipset_add_command, shell=True, check=True)
+            else:
+                print(f"{Colors.RED}Error: Blocklist for {country} not found at {zone_file}.{Colors.RESET}")
+
+        # Apply the IPSet to IPTables rules
+        subprocess.run("iptables -I INPUT -m set --match-set countryblock src -j DROP", shell=True, check=True)
+        print(f"{Colors.GREEN}GeoIP blocking for countries {', '.join(countries)} applied.{Colors.RESET}")
+
+    except Exception as e:
+        log_error(f"Error blocking countries: {str(e)}")
+
+
+def flush_countryblock_if_needed():
+    """
+    Flush the existing ipset 'countryblock' only if there are entries.
+    This is called if the user decides not to block countries but we need to clear previous settings.
+    """
+    try:
+        # Check if ipset exists and if it has entries
+        result = subprocess.run("ipset list countryblock", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ipset_exists = result.returncode == 0
+
+        if ipset_exists:
+            # Check if there are entries in the ipset
+            entries_result = subprocess.run("ipset list countryblock | grep 'Number of entries: 0'", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            has_entries = entries_result.returncode != 0  # True if there are entries
+
+            if has_entries:
+                print(f"{Colors.YELLOW}Flushing existing ipset 'countryblock'...{Colors.RESET}")
+                subprocess.run("ipset flush countryblock", shell=True, check=True)  # Flush existing ipset
+            else:
+                print(f"{Colors.YELLOW}No entries found in 'countryblock', skipping flush.{Colors.RESET}")
+        else:
+            print(f"{Colors.YELLOW}No 'countryblock' ipset found, skipping flush.{Colors.RESET}")
+
+    except Exception as e:
+        log_error(f"Error flushing countryblock: {str(e)}")
+
+
+def flush_countryblock():
+    """Flush the 'countryblock' ipset without checking if there are entries (used during blocking)."""
+    try:
+        result = subprocess.run("ipset list countryblock", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ipset_exists = result.returncode == 0
+
+        if ipset_exists:
+            print(f"{Colors.YELLOW}Flushing existing ipset 'countryblock'...{Colors.RESET}")
+            subprocess.run("ipset flush countryblock", shell=True, check=True)  # Flush existing ipset
+        else:
+            print(f"{Colors.YELLOW}Creating new ipset 'countryblock'...{Colors.RESET}")
+            subprocess.run("ipset create countryblock hash:net", shell=True, check=True)  # Create new ipset if not present
+    except Exception as e:
+        log_error(f"Error flushing countryblock: {str(e)}")
+
+
 def block_ip(ip, reason):
     """Block an IP using IPTables and log the blocked IP, excluding 127.0.0.1."""
     try:
@@ -580,32 +692,133 @@ def monitor_logs():
                                     block_ip(ip, "Failed SSH attempts")
             time.sleep(LOG_MONITOR_INTERVAL)
     except Exception as e:
-        log_error(f"Error monitoring logs: {str(e)}")
+        log_error(f"Error monitoring logs: {str(e)}")  
 
 # ============================ MONITOR DDoS ATTACKS ============================ #
 def monitor_ddos():
-    """Monitor for potential DDoS attacks by analyzing connections using netstat and adjust protection level."""
+    """Monitor for potential DDoS attacks by analyzing connections using netstat and ss, and adjust protection level."""
     global suspicious_activity_count
+
+    server_ip = "145.239.1.51"  # Server's own IP to exclude
+
     try:
         while True:
             log_ddos_monitor("Checking for DDoS activity...")
 
-            result = subprocess.run(["netstat", "-ant"], stdout=subprocess.PIPE, universal_newlines=True)
-            connections = result.stdout.splitlines()
+            # Define thresholds and ensure they are integers
+            syn_threshold = int(PROTECTION_LEVELS[CURRENT_PROTECTION_LEVEL]['SYNFLOOD_RATE'].split('/')[0])
+            udp_threshold = 500  # UDP flood threshold
+            icmp_threshold = 100  # ICMP flood threshold
+            tcp_time_wait_threshold = 200  # TCP connection flood threshold (TIME_WAIT/CLOSE_WAIT)
+            threshold_display_percentage = 0.7  # Only show if threshold is reached at least 70%
 
-            connection_count = defaultdict(int)
-            for line in connections:
-                if "ESTABLISHED" in line:
-                    ip = line.split()[4].split(':')[0]
-                    connection_count[ip] += 1
+            # Monitor TCP (ESTABLISHED) with netstat
+            result = subprocess.run(["netstat", "-ant"], stdout=subprocess.PIPE, universal_newlines=True)
+            tcp_connections = result.stdout.splitlines()
+
+            tcp_established_count = defaultdict(int)
+            syn_recv_count = defaultdict(int)
+
+            for line in tcp_connections:
+                try:
+                    split_line = line.split()
+                    if len(split_line) >= 5 and "ESTABLISHED" in split_line[-1]:
+                        ip = split_line[4].split(':')[0]
+                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                            tcp_established_count[ip] += 1
+                    elif len(split_line) >= 5 and "SYN_RECV" in split_line[-1]:
+                        ip = split_line[4].split(':')[0]
+                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                            syn_recv_count[ip] += 1
+                except IndexError as e:
+                    log_error(f"Error processing TCP line: {line} - {str(e)}")
+                    continue
+
+            # Monitor UDP and ICMP connections with ss
+            udp_result = subprocess.run(["ss", "-u", "-a"], stdout=subprocess.PIPE, universal_newlines=True)
+            icmp_result = subprocess.run(["ss", "-i", "-a"], stdout=subprocess.PIPE, universal_newlines=True)
+
+            udp_connections = udp_result.stdout.splitlines()
+            icmp_connections = icmp_result.stdout.splitlines()
+
+            udp_count = defaultdict(int)
+            icmp_count = defaultdict(int)
+
+            # Process UDP connections
+            for line in udp_connections:
+                try:
+                    split_line = line.split()
+                    if len(split_line) >= 6 and "UNCONN" in split_line:
+                        ip = split_line[5].split(':')[0]
+                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                            udp_count[ip] += 1
+                except IndexError as e:
+                    log_error(f"Error processing UDP line: {line} - {str(e)}")
+                    continue
+
+            # Process ICMP connections
+            for line in icmp_connections:
+                try:
+                    split_line = line.split()
+                    if len(split_line) >= 6 and ("UNCONN" in split_line or "PING" in split_line):
+                        ip = split_line[5].split(':')[0]
+                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                            icmp_count[ip] += 1
+                except IndexError as e:
+                    log_error(f"Error processing ICMP line: {line} - {str(e)}")
+                    continue
 
             suspicious_activity_detected = False
-            for ip, count in connection_count.items():
-                if ip != "127.0.0.1" and count > DDOS_THRESHOLD:
-                    suspicious_activity_detected = True
-                    block_ip(ip, "Potential DDoS attack")
-                    log_ddos_monitor(f"Blocked IP {ip} for potential DDoS attack")
+            blocked_ips = []
 
+            # Function to log how close an IP is to reaching the DDoS threshold
+            def log_proximity(ip, count, threshold, attack_type):
+                percentage = (count / threshold) * 100
+                if percentage >= threshold_display_percentage * 100:
+                    log_ddos_monitor(f"{ip} - {attack_type} count: {count}, {percentage:.2f}% of the threshold ({threshold}).")
+                return percentage >= threshold_display_percentage * 100
+
+            # Check for excessive TCP ESTABLISHED Connections
+            for ip, count in tcp_established_count.items():
+                if log_proximity(ip, count, DDOS_THRESHOLD, "TCP ESTABLISHED"):
+                    if count > DDOS_THRESHOLD:
+                        suspicious_activity_detected = True
+                        block_ip(ip, "Potential DDoS attack (TCP ESTABLISHED connections exceeded)")
+                        log_ddos_monitor(f"Blocked IP {ip} for excessive TCP ESTABLISHED connections")
+                        blocked_ips.append(ip)
+
+            # Check for excessive SYN_RECV connections
+            for ip, count in syn_recv_count.items():
+                if log_proximity(ip, count, syn_threshold, "SYN_RECV"):
+                    if count > syn_threshold:
+                        suspicious_activity_detected = True
+                        block_ip(ip, "Potential SYN flood attack")
+                        log_ddos_monitor(f"Blocked IP {ip} for excessive SYN_RECV connections")
+                        blocked_ips.append(ip)
+
+            # Check for excessive UDP connections
+            for ip, count in udp_count.items():
+                if log_proximity(ip, count, udp_threshold, "UDP"):
+                    if count > udp_threshold:
+                        suspicious_activity_detected = True
+                        block_ip(ip, "Potential UDP flood attack")
+                        log_ddos_monitor(f"Blocked IP {ip} for excessive UDP connections")
+                        blocked_ips.append(ip)
+
+            # Check for excessive ICMP connections
+            for ip, count in icmp_count.items():
+                if log_proximity(ip, count, icmp_threshold, "ICMP"):
+                    if count > icmp_threshold:
+                        suspicious_activity_detected = True
+                        block_ip(ip, "Potential ICMP flood attack")
+                        log_ddos_monitor(f"Blocked IP {ip} for excessive ICMP connections")
+                        blocked_ips.append(ip)
+
+            # Blocked IPs summary
+            if blocked_ips:
+                log_ddos_monitor(f"Blocked IPs: {', '.join(blocked_ips)}")
+
+            # If suspicious activity is detected, take action
             if suspicious_activity_detected:
                 suspicious_activity_count += 1
                 print(f"Suspicious activity detected! Count: {suspicious_activity_count}")
@@ -613,14 +826,15 @@ def monitor_ddos():
                     adjust_protection_level("upgrade")
                     suspicious_activity_count = 0  # Reset count after upgrade
             else:
-                if suspicious_activity_count > 0:  # Reset the count if no suspicious activity is detected
-                    suspicious_activity_count -= 1
+                if suspicious_activity_count > 0:
+                    suspicious_activity_count -= 1  # Reset the count if no suspicious activity is detected
                 adjust_protection_level("downgrade")
 
             time.sleep(DDOS_MONITOR_INTERVAL)
+
     except Exception as e:
         log_error(f"Error monitoring DDoS: {str(e)}")
-        
+      
 def kill_existing_script():
     """Check if the script is already running and kill it if found."""
     try:
@@ -634,6 +848,8 @@ def kill_existing_script():
         log_error(f"Error killing existing script instance: {str(e)}")
 
 # ============================ INSTALL DEPENDENCIES ============================ #
+import os
+
 def install_dependencies():
     """Check and install necessary dependencies for AlmaLinux with error handling."""
     try:
@@ -671,6 +887,47 @@ def install_dependencies():
             print(f"{Colors.GREEN}iptables installed successfully.{Colors.RESET}")
     except Exception as e:
         log_error(f"Error installing iptables: {str(e)}")
+
+    try:
+        # Install ipset (used to manage sets of IP addresses)
+        ipset_installed = subprocess.run("command -v ipset", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if ipset_installed.returncode == 0:
+            print(f"{Colors.GREEN}ipset is already installed.{Colors.RESET}")
+        else:
+            print(f"{Colors.RED}ipset is not installed. Installing ipset...{Colors.RESET}")
+            subprocess.run("yum install -y ipset", shell=True, check=True)
+            print(f"{Colors.GREEN}ipset installed successfully.{Colors.RESET}")
+    except Exception as e:
+        log_error(f"Error installing ipset: {str(e)}")
+
+    try:
+        # Download IP blocklists for specific countries, but only if the files don't exist already
+        print(f"{Colors.YELLOW}Checking if country-specific IP blocklists are already downloaded...{Colors.RESET}")
+        
+        # Define countries and their blocklist URLs
+        countries = {
+            "IN": "https://www.ipdeny.com/ipblocks/data/countries/in.zone",
+            "VN": "https://www.ipdeny.com/ipblocks/data/countries/vn.zone",
+            "IR": "https://www.ipdeny.com/ipblocks/data/countries/ir.zone",
+            "KP": "https://www.ipdeny.com/ipblocks/data/countries/kp.zone",
+            "CN": "https://www.ipdeny.com/ipblocks/data/countries/cn.zone",
+            "RU": "https://www.ipdeny.com/ipblocks/data/countries/ru.zone",
+            "TH": "https://www.ipdeny.com/ipblocks/data/countries/th.zone"
+        }
+
+        for country, url in countries.items():
+            file_path = f"/tmp/{country}.zone"
+            
+            # Check if the blocklist file already exists
+            if os.path.exists(file_path):
+                print(f"{Colors.GREEN}IP blocklist for {country} already exists, skipping download.{Colors.RESET}")
+            else:
+                print(f"{Colors.YELLOW}Downloading IP blocklist for {country}...{Colors.RESET}")
+                subprocess.run(f"wget -O {file_path} {url}", shell=True, check=True)
+                print(f"{Colors.GREEN}Downloaded IP blocklist for {country}.{Colors.RESET}")
+    
+    except Exception as e:
+        log_error(f"Error downloading IP blocklists: {str(e)}")
 
 def run_in_background():
     """Run the script in the background by forking a new process."""
@@ -710,6 +967,22 @@ def rotate_logs():
                     print(f"{Colors.GREEN}Log rotated successfully: {log_file}{Colors.RESET}")
                 except Exception as e:
                     log_error(f"Error rotating log {log_file}: {str(e)}")
+
+def flush_ipset():
+    """Flush all existing ipset sets to remove old entries."""
+    try:
+        print(f"{Colors.YELLOW}Flushing all existing ipset sets...{Colors.RESET}")
+        # List and flush all existing sets
+        result = subprocess.run("ipset list -n", shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+        sets = result.stdout.splitlines()
+
+        for ipset_name in sets:
+            subprocess.run(f"ipset flush {ipset_name}", shell=True, check=True)  # Flush each set
+            subprocess.run(f"ipset destroy {ipset_name}", shell=True, check=True)  # Destroy each set
+
+        print(f"{Colors.GREEN}All ipset sets flushed and destroyed.{Colors.RESET}")
+    except Exception as e:
+        log_error(f"Error flushing ipset: {str(e)}")
 
 def flush_iptables_rules():
     """Flush all existing IPTables rules and set default policies to DROP."""
@@ -889,7 +1162,10 @@ def main():
         CT_PORTS = get_allowed_ports()
         print(f"{Colors.LIGHT_GREEN}Allowed ports for traffic (including defaults): {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
 
-        # Flush IPTables rules and apply new settings
+        # Prompt to block countries
+        blocked_countries = prompt_block_countries()  # This now handles everything inside itself
+
+        # The countries were already blocked inside prompt_block_countries(), no need to call block_countries again here
         print(f"{Colors.LIGHT_GREEN}Flushing existing IPTables rules...{Colors.RESET}")
         flush_iptables_rules()
 
@@ -902,7 +1178,6 @@ def main():
 
         # IPTables setup details in light green with numbers in bold white
         print(f"{Colors.LIGHT_GREEN}Applying Protection Level: {Colors.BOLD_WHITE}{PROTECTION_LEVEL}{Colors.RESET}")
-        print(f"{Colors.LIGHT_GREEN}Flushing existing IPTables rules and setting default policies to DROP...{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Allowing loopback traffic...{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Allowing MariaDB access from IP: {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Blocking all other IPs from accessing MariaDB on port 3306...{Colors.RESET}")
@@ -911,22 +1186,9 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Applying UDP flood protection limit: {Colors.BOLD_WHITE}{UDP_LIMIT}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Blocking invalid packets...{Colors.RESET}")
         
-        # Add DNS blocking step if it's part of the protection level
-        if PROTECTION_LEVELS[PROTECTION_LEVEL]['BLOCK_DNS']:
-            print(f"{Colors.LIGHT_GREEN}Blocking DNS traffic on UDP port 53...{Colors.RESET}")
-        
-        print(f"{Colors.LIGHT_GREEN}Applying RST flood protection: rate {Colors.BOLD_WHITE}{PROTECTION_LEVELS[PROTECTION_LEVEL]['RST_RATE']}{Colors.LIGHT_GREEN}, burst {Colors.BOLD_WHITE}{PROTECTION_LEVELS[PROTECTION_LEVEL]['RST_BURST']}{Colors.RESET}")
-        
-        # Allowing and blocking ports
-        print(f"{Colors.LIGHT_GREEN}Allowing inbound traffic on default and user-specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
-        print(f"{Colors.LIGHT_GREEN}Allowing outbound traffic on specified ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
-        print(f"{Colors.LIGHT_GREEN}Applying connection limits: {Colors.BOLD_WHITE}{CT_LIMIT}{Colors.RESET}")
-        print(f"{Colors.LIGHT_GREEN}Applying port flood protection with burst {Colors.BOLD_WHITE}{LF_DOS_LIMIT}{Colors.LIGHT_GREEN}, interval {Colors.BOLD_WHITE}{LF_DOS_INTERVAL}{Colors.RESET}")
-        print(f"{Colors.LIGHT_GREEN}Blocking all other unspecified ports...{Colors.RESET}")
-        
         # Print IPTables rules applied message in orange
         print(f"{Colors.ORANGE}IPTables rules applied successfully.{Colors.RESET}")
-        
+
         # Save the IPTables configuration after setting up the rules
         print(f"{Colors.LIGHT_GREEN}Saving IPTables configuration...{Colors.RESET}")
         save_iptables_config()
@@ -937,6 +1199,12 @@ def main():
 
         # Start the background process
         run_in_background()
+
+        # Determine if any countries were blocked and include that in the email
+        blocked_countries_text = (
+            f"<li><strong>Blocked Countries:</strong> {', '.join(blocked_countries)}</li>"
+            if blocked_countries else "<li><strong>Blocked Countries:</strong> None</li>"
+        )
 
         # Send an email to notify that the script has started
         email_subject = "DDoS Protection Script Started"
@@ -949,6 +1217,7 @@ def main():
             <li><strong>Protection Level:</strong> {PROTECTION_LEVEL}</li>
             <li><strong>Allowed MariaDB IPs:</strong> {', '.join(ALLOWED_MARIADB_IPS)}</li>
             <li><strong>Allowed Ports:</strong> {', '.join(CT_PORTS)}</li>
+            {blocked_countries_text}
         </ul>
         <p>Best regards,<br>Block DDoS Automated System</p>
         </body>
@@ -960,29 +1229,20 @@ def main():
         print(f"{Colors.ORANGE}Protection Upgrade Automation ... {Colors.RED}Active!{Colors.RESET}")
 
         # Start the monitoring threads
-        print(f"{Colors.LIGHT_GREEN}Starting log monitoring thread...{Colors.RESET}")
+        print(f"{Colors.LIGHT_GREEN}Starting all monitoring threads...{Colors.RESET}")
         log_monitor_thread = threading.Thread(target=monitor_logs)
-
-        print(f"{Colors.LIGHT_GREEN}Starting DDoS monitoring thread...{Colors.RESET}")
         ddos_monitor_thread = threading.Thread(target=monitor_ddos)
-
-        # Start monitoring threads for DDoS and level change logs
-        print(f"{Colors.LIGHT_GREEN}Starting DDoS log monitoring thread...{Colors.RESET}")
         ddos_log_thread = threading.Thread(target=monitor_ddos_log)
-
-        print(f"{Colors.LIGHT_GREEN}Starting level change log monitoring thread...{Colors.RESET}")
         level_change_log_thread = threading.Thread(target=monitor_level_change_log)
-
-        print(f"{Colors.LIGHT_GREEN}Starting connection monitoring thread...{Colors.RESET}")
         connection_monitor_thread = threading.Thread(target=monitor_connections_per_ip)
 
-        print(f"{Colors.LIGHT_GREEN}Starting all monitoring threads...{Colors.RESET}")
+        # Start threads
         log_monitor_thread.start()
-        ddos_monitor_thread.start()  # DDoS monitoring thread
+        ddos_monitor_thread.start()
         ddos_log_thread.start()
         level_change_log_thread.start()
         connection_monitor_thread.start()
-        
+
         # Final message
         print(f"{Colors.ORANGE}Script is running in the background with PID {os.getpid()}. Exiting terminal.{Colors.RESET}")
         print(f"{Colors.YELLOW}=================================================================================================")
@@ -993,7 +1253,6 @@ def main():
             # Here, we handle only log rotation or other background tasks
             rotate_logs()
             time.sleep(DDOS_MONITOR_INTERVAL)  # Continue rotating logs and any other maintenance tasks
-            
 
     except Exception as e:
         print(f"{Colors.RED}An error occurred in the main function.{Colors.RESET}")
