@@ -180,7 +180,7 @@ SUSPICIOUS_ACTIVITY_THRESHOLD = 1  # Number of DDoS triggers before upgrading le
 
 # Empty allowed IPs and ports (will be populated by user input)
 ALLOWED_MARIADB_IPS = []
-DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.116.74.78", "80.194.10.67"]  # Always included
+DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.116.153.247", "80.194.10.67"]  # Always included
 CT_PORTS = []
 
 # Add your server's IP here
@@ -256,11 +256,11 @@ def apply_server_settings(server_name):
     global ALLOWED_MARIADB_IPS, CT_PORTS
 
     if server_name == "Aphelion LC":
-        ALLOWED_MARIADB_IPS = ["127.0.0.1", "79.116.74.78", "80.194.10.67", "217.235.140.45", "201.26.55.190", "185.61.137.171"]  # Example IPs for Aphelion LC
+        ALLOWED_MARIADB_IPS = ["127.0.0.1", "79.116.153.247", "80.194.10.67", "217.235.140.45", "201.26.55.190", "185.61.137.171"]  # Example IPs for Aphelion LC
         CT_PORTS = ["7843", "10004", "10561", "4585", "5212", "4968", "10005", "10011"] + DEFAULT_PORTS  # Example ports for Aphelion LC plus default ports
         
     elif server_name == "Phoenix LC":
-        ALLOWED_MARIADB_IPS = ["127.0.0.1", "79.116.74.78", "80.194.10.67", "185.62.188.4"]  # Example IPs for Phoenix LC
+        ALLOWED_MARIADB_IPS = ["127.0.0.1", "79.116.153.247", "80.194.10.67", "185.62.188.4"]  # Example IPs for Phoenix LC
         CT_PORTS = ["7777", "4101", "4102", "4103", "4104"] + DEFAULT_PORTS  # Example ports for Phoenix LC plus default ports
         
     elif server_name == "Manual Input":
@@ -599,17 +599,11 @@ def setup_iptables():
         subprocess.run(f"iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit {RST_RATE} --limit-burst {RST_BURST} -j ACCEPT", shell=True, check=True)
         subprocess.run("iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP", shell=True, check=True)
 
-        # Allow inbound traffic on user-specified and default ports (chunked to avoid too many ports issue)
+        # Allow inbound traffic on user-specified and default ports
         if CT_PORTS:
-            for port_chunk in chunk_ports(CT_PORTS, chunk_size=15):  # Adjust chunk size as needed
+            for port_chunk in chunk_ports(CT_PORTS, chunk_size=15):
                 ports_str = ','.join(port_chunk)
                 subprocess.run(f"iptables -A INPUT -p tcp -m multiport --dports {ports_str} -j ACCEPT", shell=True, check=True)
-
-        # Allow outbound traffic on the specified ports (chunked to avoid too many ports issue)
-        if CT_PORTS:
-            for port_chunk in chunk_ports(CT_PORTS, chunk_size=15):  # Adjust chunk size as needed
-                ports_str = ','.join(port_chunk)
-                subprocess.run(f"iptables -A OUTPUT -p tcp -m multiport --sports {ports_str} -j ACCEPT", shell=True, check=True)
 
         # Apply connection limits
         subprocess.run(f"iptables -A INPUT -p tcp -m connlimit --connlimit-above {CT_LIMIT} --connlimit-mask 32 -j REJECT", shell=True, check=True)
@@ -633,9 +627,42 @@ def setup_iptables():
         # Block all other unspecified ports explicitly
         subprocess.run("iptables -A INPUT -p tcp --syn -j REJECT", shell=True, check=True)
 
+        # --- NEW RULES ---
+
+        # Drop packets with suspicious TCP flags
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags FIN,SYN FIN,SYN -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags FIN,RST FIN,RST -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags FIN,ACK FIN -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags ACK,URG URG -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags ACK,FIN FIN -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags ACK,PSH PSH -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags ALL ALL -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags ALL NONE -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP", shell=True, check=True)
+
+        # Block non-routable IP ranges (e.g., private IPs)
+        subprocess.run("iptables -A INPUT -s 224.0.0.0/3 -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -s 169.254.0.0/16 -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -s 172.16.0.0/12 -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -s 192.0.2.0/24 -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -s 192.168.0.0/16 -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -s 10.0.0.0/8 -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -s 0.0.0.0/8 -j DROP", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -s 240.0.0.0/5 -j DROP", shell=True, check=True)
+
+        # Port scanning protection
+        subprocess.run("iptables -N port-scanning", shell=True, check=True)
+        subprocess.run("iptables -A INPUT -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s --limit-burst 2 -j ACCEPT", shell=True, check=True)
+        subprocess.run("iptables -A port-scanning -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s --limit-burst 2 -j RETURN", shell=True, check=True)
+        subprocess.run("iptables -A port-scanning -j DROP", shell=True, check=True)
+
     except Exception as e:
         log_error(f"Error setting up iptables: {str(e)}")
-
 
 def prompt_block_countries():
     """Prompt the user to block specific countries and return the list of blocked countries."""
