@@ -9,6 +9,7 @@ import math
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import traceback  # To log the detailed error traceback
 
 # ============================ CONFIGURATION ============================ #
 # Protection Level Configuration (1 = lenient, 6 = maximum security)
@@ -23,7 +24,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 60, # Same log interval
         "LF_DOS_LIMIT": 1300,       # Slightly higher DOS limit
         "LF_DOS_INTERVAL": 130,     # Increased burst allowance
-        "DDOS_MONITOR_INTERVAL": 10,
+        "DDOS_MONITOR_INTERVAL": 15,
         "CONNLIMIT": 35,            # Increased connection limit
         "PORTFLOOD_BURST": 70,      # Increased burst size for port flooding
         "PORTFLOOD_INTERVAL": 60,   # Same interval
@@ -44,7 +45,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 50,
         "LF_DOS_LIMIT": 1100,       # Increased DOS limit
         "LF_DOS_INTERVAL": 120,     # Increased burst
-        "DDOS_MONITOR_INTERVAL": 10,
+        "DDOS_MONITOR_INTERVAL": 15,
         "CONNLIMIT": 28,            # Increased connection limit
         "PORTFLOOD_BURST": 55,      # Increased burst size
         "PORTFLOOD_INTERVAL": 60,
@@ -65,7 +66,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 40,
         "LF_DOS_LIMIT": 800,        # Increased DOS limit
         "LF_DOS_INTERVAL": 90,
-        "DDOS_MONITOR_INTERVAL": 10,
+        "DDOS_MONITOR_INTERVAL": 15,
         "CONNLIMIT": 22,            # Increased limit
         "PORTFLOOD_BURST": 45,      # Increased burst
         "PORTFLOOD_INTERVAL": 90,
@@ -86,7 +87,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 30,
         "LF_DOS_LIMIT": 650,        # Slightly higher DOS limit
         "LF_DOS_INTERVAL": 65,      # Increased burst
-        "DDOS_MONITOR_INTERVAL": 10,
+        "DDOS_MONITOR_INTERVAL": 15,
         "CONNLIMIT": 17,            # Increased connection limit
         "PORTFLOOD_BURST": 35,      # Increased burst size
         "PORTFLOOD_INTERVAL": 120,
@@ -107,7 +108,7 @@ PROTECTION_LEVELS = {
         "LOG_MONITOR_INTERVAL": 20,
         "LF_DOS_LIMIT": 450,        # Increased DOS limit
         "LF_DOS_INTERVAL": 45,      # Increased burst
-        "DDOS_MONITOR_INTERVAL": 10,
+        "DDOS_MONITOR_INTERVAL": 15,
         "CONNLIMIT": 12,            # Slightly increased connection limit
         "PORTFLOOD_BURST": 25,      # Increased burst size
         "PORTFLOOD_INTERVAL": 90,
@@ -125,10 +126,10 @@ PROTECTION_LEVELS = {
         "CT_LIMIT": 9,              # Increased connection limit slightly
         "CT_BLOCK_TIME": "14400",
         "LF_TRIGGER": 2,            # More failed login attempts allowed
-        "LOG_MONITOR_INTERVAL": 10,
+        "LOG_MONITOR_INTERVAL": 20,
         "LF_DOS_LIMIT": 350,        # Increased DOS limit
         "LF_DOS_INTERVAL": 35,      # Increased burst size
-        "DDOS_MONITOR_INTERVAL": 10,
+        "DDOS_MONITOR_INTERVAL": 15,
         "CONNLIMIT": 9,             # Slightly more tolerant connection limit
         "PORTFLOOD_BURST": 18,      # Increased burst size
         "PORTFLOOD_INTERVAL": 60,
@@ -145,12 +146,12 @@ PROTECTION_LEVELS = {
 
 # DDoS Threshold Configuration
 DDOS_THRESHOLDS = {
-    1: 30,  # Lenient
-    2: 25,
-    3: 20,
-    4: 18,
-    5: 16,
-    6: 15   # Maximum security
+    1: 90,  # Lenient
+    2: 80,
+    3: 70,
+    4: 66,
+    5: 62,
+    6: 50   # Maximum security
 }
 
 # This configuration defines the allowed number of simultaneous connections per IP address
@@ -175,11 +176,11 @@ DDOS_THRESHOLDS = {
 INITIAL_PROTECTION_LEVEL = None  # Store initial protection level set by the user
 CURRENT_PROTECTION_LEVEL = None  # Track current active protection level
 DDOS_THRESHOLD = None            # Dynamic DDoS threshold, will change based on protection level
-SUSPICIOUS_ACTIVITY_THRESHOLD = 3  # Number of DDoS triggers before upgrading level
+SUSPICIOUS_ACTIVITY_THRESHOLD = 1  # Number of DDoS triggers before upgrading level
 
 # Empty allowed IPs and ports (will be populated by user input)
 ALLOWED_MARIADB_IPS = []
-DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.116.74.78", "80.194.10.67", "185.62.188.4"]  # Always included
+DEFAULT_MARIADB_IPS = ["127.0.0.1", "79.116.74.78", "80.194.10.67"]  # Always included
 CT_PORTS = []
 
 # Add your server's IP here
@@ -214,10 +215,79 @@ SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER_EMAIL = "aphelionlc.status@gmail.com"
 SENDER_PASSWORD = "rucrdxslwkkzmkcn"
-RECIPIENT_EMAILS = ["williamperez1988@hotmail.com"] #, "lewisallum11@gmail.com"]
+
+RECIPIENTS = {
+    "Aphelion LC": ["williamperez1988@hotmail.com", "lewisallum11@gmail.com"],  
+    "Phoenix LC": ["williamperez1988@hotmail.com", "lewisallum11@gmail.com"],    
+    "Manual Input": ["williamperez1988@hotmail.com", "lewisallum11@gmail.com"] 
+}
+
+# ============================ SERVER SELECTION FUNCTION ============================ #
+def select_server():
+    """Prompt the user to select which server the script is meant to work with."""
+    try:
+        print(f"\n{Colors.CYAN}==============================================================")
+        print(f"             Please select which server to configure")
+        print(f"=============================================================={Colors.RESET}")
+        print(f"\n  1. {Colors.LIGHT_GREEN}Aphelion Last Chaos{Colors.RESET}")
+        print(f"\n  2. {Colors.LIGHT_GREEN}Phoenix Last Chaos{Colors.RESET}")
+        print(f"\n  3. {Colors.LIGHT_GREEN}Manual Input (Enter MariaDB IPs and Ports Manually){Colors.RESET}")
+
+        while True:
+            try:
+                choice = int(input(f"\nEnter the desired server (1, 2, or 3): "))
+                if choice == 1:
+                    return "Aphelion LC"
+                elif choice == 2:
+                    return "Phoenix LC"
+                elif choice == 3:
+                    return "Manual Input"
+                else:
+                    print(f"{Colors.RED}Invalid input. Please enter 1, 2, or 3.{Colors.RESET}")
+            except ValueError:
+                print(f"{Colors.RED}Invalid input. Please enter 1, 2, or 3.{Colors.RESET}")
+    except Exception as e:
+        log_error(f"Error selecting server: {str(e)}")
+        return None
+
+# ============================ APPLY SERVER SETTINGS ============================ #
+def apply_server_settings(server_name):
+    """Apply the MariaDB IPs and ports based on the selected server or user input."""
+    global ALLOWED_MARIADB_IPS, CT_PORTS
+
+    if server_name == "Aphelion LC":
+        ALLOWED_MARIADB_IPS = ["127.0.0.1", "79.116.74.78", "80.194.10.67", "217.235.140.45", "201.26.55.190", "185.61.137.171"]  # Example IPs for Aphelion LC
+        CT_PORTS = ["7843", "10004", "10561", "4585", "5212", "4968", "10005", "10011"] + DEFAULT_PORTS  # Example ports for Aphelion LC plus default ports
+        
+    elif server_name == "Phoenix LC":
+        ALLOWED_MARIADB_IPS = ["127.0.0.1", "79.116.74.78", "80.194.10.67", "185.62.188.4"]  # Example IPs for Phoenix LC
+        CT_PORTS = ["7777", "4101", "4102", "4103", "4104"] + DEFAULT_PORTS  # Example ports for Phoenix LC plus default ports
+        
+    elif server_name == "Manual Input":
+        # Only for Manual Input, prompt the user for MariaDB IPs and ports
+        ip_input = input("Enter the IP addresses allowed to connect to MariaDB (separated by commas): ")
+        if ip_input:
+            ALLOWED_MARIADB_IPS = [ip.strip() for ip in ip_input.split(',')]  # Split and remove spaces
+        else:
+            ALLOWED_MARIADB_IPS = DEFAULT_MARIADB_IPS  # Use default if no input
+        
+        port_input = input("Enter the ports to protect (separated by commas): ")
+        if port_input:
+            CT_PORTS = [port.strip() for port in port_input.split(',')] + DEFAULT_PORTS  # User input ports plus default ports
+        else:
+            CT_PORTS = DEFAULT_PORTS  # Use default if no input
+    else:
+        log_error("Invalid server name selected.")
+        return
+
+    print(f"{Colors.LIGHT_GREEN}Server {server_name} selected.{Colors.RESET}")
+    print(f"{Colors.LIGHT_GREEN}Allowed MariaDB IPs: {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
+    print(f"{Colors.LIGHT_GREEN}Allowed ports: {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
+
+
 
 # ============================ EMAIL FUNCTION ============================ #
-def send_email(subject, message):
+def send_email(server_name, subject, message):
     try:
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
@@ -225,19 +295,19 @@ def send_email(subject, message):
 
         msg = MIMEMultipart()
         msg['From'] = SENDER_EMAIL
-        msg['To'] = ', '.join(RECIPIENT_EMAILS)
+        msg['To'] = ', '.join(RECIPIENTS[server_name])  # Send email based on the selected server
         msg['Subject'] = subject
 
         msg.attach(MIMEText(message, 'html'))
 
-        server.sendmail(SENDER_EMAIL, RECIPIENT_EMAILS, msg.as_string())
+        server.sendmail(SENDER_EMAIL, RECIPIENTS[server_name], msg.as_string())
         server.quit()
         print("Email sent successfully.")
     except Exception as e:
         print("Error sending email:", str(e))
 
 # ============================ MONITOR LOGS FOR EMAIL ============================ #
-def monitor_ddos_log():
+def monitor_ddos_log(server_name):
     """Check DDoS-Monitor.log for new DDoS activity and send email if detected."""
     ddos_log_path = os.path.join(SECURITY_DIR, "DDoS-Monitor.log")
     last_position = 0
@@ -253,20 +323,20 @@ def monitor_ddos_log():
             
             for line in new_lines:
                 if "Potential DDoS attack" in line:
-                    email_subject = "DDoS Activity Detected on Your Server"
+                    email_subject = f"DDoS Activity Detected on {server_name} Server"
                     email_message = f"""
                     <html>
                     <body>
                     <h2>Dear Admins,</h2>
-                    <p>We detected a potential DDoS attack on Phoenix LC server:</p>
+                    <p>We detected a potential DDoS attack on {server_name} server:</p>
                     <p><strong>{line}</strong></p>
                     <p>Best regards,<br>Block DDoS Automated System</p>
                     </body>
                     </html>
                     """
-                    send_email(email_subject, email_message)
+                    send_email(server_name, email_subject, email_message)
 
-def monitor_level_change_log():
+def monitor_level_change_log(server_name):
     """Check level_change.log for any protection level changes and send email if detected."""
     level_change_log_path = os.path.join(SECURITY_DIR, "level_change.log")
     last_position = 0
@@ -281,18 +351,18 @@ def monitor_level_change_log():
             last_position = level_log.tell()
             
             for line in new_lines:
-                email_subject = "Protection Level Changed on Your Server"
+                email_subject = f"Protection Level Changed on {server_name} Server"
                 email_message = f"""
                 <html>
                 <body>
                 <h2>Dear Admins,</h2>
-                <p>The protection level on Phoenix LC server has changed:</p>
+                <p>The protection level on {server_name} server has changed:</p>
                 <p><strong>{line}</strong></p>
                 <p>Best regards,<br>Block DDoS Automated System</p>
                 </body>
                 </html>
                 """
-                send_email(email_subject, email_message)
+                send_email(server_name, email_subject, email_message)
 
 # ============================ COLOR CODES ============================ #
 class Colors:
@@ -357,7 +427,7 @@ def adjust_protection_level(activity):
         
         # Flush and reapply rules for the downgraded level
         apply_protection_level(CURRENT_PROTECTION_LEVEL, CT_PORTS)
-        log_level_change(old_level, CURRENT_PROTECTION_LEVEL, "Suspicious activity subsided")
+        log_level_change(old_level, CURRENT_PROTECTION_LEVEL, "Suspicious activity not detected")
 
 
 # ============================ ERROR HANDLING IN FUNCTIONS ============================ #
@@ -445,6 +515,7 @@ def apply_protection_level(level, allowed_ports):
         # Flush IPTables before applying the new rules
         flush_iptables_rules()
 
+        # Set the new protection level parameters
         SYNFLOOD_RATE = config['SYNFLOOD_RATE']
         SYNFLOOD_BURST = config['SYNFLOOD_BURST']
         CT_LIMIT = config['CT_LIMIT']
@@ -471,6 +542,9 @@ def apply_protection_level(level, allowed_ports):
 
         # Reapply IPTables rules based on the new level
         setup_iptables()
+
+        # Reapply previously blocked IPs from the log after the rules are flushed
+        reapply_blocked_ips()
 
         print(f"Applied protection level {level} with SYNFLOOD rate {SYNFLOOD_RATE}, burst {SYNFLOOD_BURST}")
     else:
@@ -506,6 +580,9 @@ def setup_iptables():
         # Accept loopback traffic (for local processes)
         subprocess.run("iptables -A INPUT -i lo -j ACCEPT", shell=True, check=True)
         subprocess.run("iptables -A OUTPUT -o lo -j ACCEPT", shell=True, check=True)
+
+        # Reapply previously blocked IPs before applying any accept rules
+        reapply_blocked_ips()
 
         # Allow MariaDB access from allowed IPs
         if ALLOWED_MARIADB_IPS:
@@ -558,6 +635,7 @@ def setup_iptables():
 
     except Exception as e:
         log_error(f"Error setting up iptables: {str(e)}")
+
 
 def prompt_block_countries():
     """Prompt the user to block specific countries and return the list of blocked countries."""
@@ -652,14 +730,74 @@ def flush_countryblock():
 
 
 def block_ip(ip, reason):
-    """Block an IP using IPTables and log the blocked IP, excluding 127.0.0.1."""
+    """
+    Block an IP using iptables and log the process if the IP is not already blocked.
+    
+    Args:
+        ip (str): The IP address to block.
+        reason (str): The reason for blocking the IP.
+    """
+    log_ddos_monitor(f"Attempting to block IP {ip} for reason: {reason}")
+
     try:
-        if ip != "127.0.0.1" and ip not in blocked_ips:
-            subprocess.run(f"iptables -A INPUT -s {ip} -j DROP", shell=True, check=True)
-            log_blocked_ip(ip, reason)
-            blocked_ips[ip] += 1
+        # Ensure the script is running with root privileges
+        if os.geteuid() != 0:
+            log_error(f"Script is not running as root. Cannot block IP {ip}.")
+            return
+
+        # Refined check to see if the IP is already blocked in iptables
+        check_ip_command = f"iptables -C INPUT -s {ip} -j DROP"
+        check_result = subprocess.run(check_ip_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # If the IP is not blocked (returns non-zero exit code), block the IP
+        if check_result.returncode != 0:
+            # Use '-I' instead of '-A' to insert the rule at the top
+            iptables_command = ["iptables", "-I", "INPUT", "-s", ip, "-j", "DROP"]
+            log_ddos_monitor(f"Running command to block IP: {' '.join(iptables_command)}")
+
+            # Execute the iptables command to block the IP
+            block_result = subprocess.run(iptables_command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # Log the results or any errors from the iptables command
+            if block_result.stdout:
+                log_ddos_monitor(f"iptables output: {block_result.stdout.strip()}")
+            if block_result.stderr:
+                log_error(f"iptables error: {block_result.stderr.strip()}")
+
+            log_ddos_monitor(f"Successfully blocked IP {ip} for {reason}")
+            log_blocked_ip(ip, reason)  # Log the blocked IP
+        else:
+            log_ddos_monitor(f"IP {ip} is already blocked. Skipping block operation.")
+
+    except subprocess.CalledProcessError as e:
+        log_error(f"Error occurred while trying to block IP {ip}: {str(e)}")
     except Exception as e:
-        log_error(f"Error blocking IP {ip}: {str(e)}")
+        log_error(f"Unexpected error when trying to block IP {ip}: {str(e)}")
+
+def load_blocked_ips_from_log():
+    """Load blocked IPs from the blocked_ips.log file."""
+    blocked_ips = set()  # Use a set to avoid duplicates
+    try:
+        if os.path.exists(BLOCKED_IP_LOG):
+            with open(BLOCKED_IP_LOG, 'r') as f:
+                for line in f:
+                    # Assume the log format contains "Blocked IP: <ip>"
+                    match = re.search(r"Blocked IP: (\d+\.\d+\.\d+\.\d+)", line)
+                    if match:
+                        blocked_ips.add(match.group(1))
+    except Exception as e:
+        log_error(f"Error loading blocked IPs from log: {str(e)}")
+    return list(blocked_ips)
+
+def reapply_blocked_ips():
+    """Reapply all blocked IPs after flushing iptables rules."""
+    blocked_ips = load_blocked_ips_from_log()  # Load blocked IPs from the log
+    for ip in blocked_ips:
+        try:
+            block_ip(ip, "Reapplying previously blocked IP")
+        except Exception as e:
+            log_error(f"Error reapplying blocked IP {ip}: {str(e)}")
+
 
 def monitor_logs():
     """Monitor /var/log/secure and log SSH attempts (Accepted/Failed passwords) to connection_attempts.log."""
@@ -699,7 +837,8 @@ def monitor_ddos():
     """Monitor for potential DDoS attacks by analyzing connections using netstat and ss, and adjust protection level."""
     global suspicious_activity_count
 
-    server_ip = "145.239.1.51"  # Server's own IP to exclude
+    server_ips = ["145.239.1.51", "51.89.99.95"]  # Example list of server IPs
+    blocked_ips_cache = set()  # Cache to keep track of blocked IPs
 
     try:
         while True:
@@ -724,11 +863,11 @@ def monitor_ddos():
                     split_line = line.split()
                     if len(split_line) >= 5 and "ESTABLISHED" in split_line[-1]:
                         ip = split_line[4].split(':')[0]
-                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                        if ip != "127.0.0.1" and ip not in server_ips:  # Skip localhost and all server IPs
                             tcp_established_count[ip] += 1
                     elif len(split_line) >= 5 and "SYN_RECV" in split_line[-1]:
                         ip = split_line[4].split(':')[0]
-                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                        if ip != "127.0.0.1" and ip not in server_ips:  # Skip localhost and all server IPs
                             syn_recv_count[ip] += 1
                 except IndexError as e:
                     log_error(f"Error processing TCP line: {line} - {str(e)}")
@@ -750,7 +889,7 @@ def monitor_ddos():
                     split_line = line.split()
                     if len(split_line) >= 6 and "UNCONN" in split_line:
                         ip = split_line[5].split(':')[0]
-                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                        if ip != "127.0.0.1" and ip not in server_ips:  # Skip localhost and all server IPs
                             udp_count[ip] += 1
                 except IndexError as e:
                     log_error(f"Error processing UDP line: {line} - {str(e)}")
@@ -762,7 +901,7 @@ def monitor_ddos():
                     split_line = line.split()
                     if len(split_line) >= 6 and ("UNCONN" in split_line or "PING" in split_line):
                         ip = split_line[5].split(':')[0]
-                        if ip != "127.0.0.1" and ip != server_ip:  # Skip localhost and server's own IP
+                        if ip != "127.0.0.1" and ip not in server_ips:  # Skip localhost and all server IPs
                             icmp_count[ip] += 1
                 except IndexError as e:
                     log_error(f"Error processing ICMP line: {line} - {str(e)}")
@@ -781,38 +920,42 @@ def monitor_ddos():
             # Check for excessive TCP ESTABLISHED Connections
             for ip, count in tcp_established_count.items():
                 if log_proximity(ip, count, DDOS_THRESHOLD, "TCP ESTABLISHED"):
-                    if count > DDOS_THRESHOLD:
+                    if count > DDOS_THRESHOLD and ip not in blocked_ips_cache:  # Check if not already blocked
                         suspicious_activity_detected = True
                         block_ip(ip, "Potential DDoS attack (TCP ESTABLISHED connections exceeded)")
                         log_ddos_monitor(f"Blocked IP {ip} for excessive TCP ESTABLISHED connections")
                         blocked_ips.append(ip)
+                        blocked_ips_cache.add(ip)  # Add to cache to prevent repeated blocking
 
             # Check for excessive SYN_RECV connections
             for ip, count in syn_recv_count.items():
                 if log_proximity(ip, count, syn_threshold, "SYN_RECV"):
-                    if count > syn_threshold:
+                    if count > syn_threshold and ip not in blocked_ips_cache:  # Check if not already blocked
                         suspicious_activity_detected = True
                         block_ip(ip, "Potential SYN flood attack")
                         log_ddos_monitor(f"Blocked IP {ip} for excessive SYN_RECV connections")
                         blocked_ips.append(ip)
+                        blocked_ips_cache.add(ip)  # Add to cache to prevent repeated blocking
 
             # Check for excessive UDP connections
             for ip, count in udp_count.items():
                 if log_proximity(ip, count, udp_threshold, "UDP"):
-                    if count > udp_threshold:
+                    if count > udp_threshold and ip not in blocked_ips_cache:  # Check if not already blocked
                         suspicious_activity_detected = True
                         block_ip(ip, "Potential UDP flood attack")
                         log_ddos_monitor(f"Blocked IP {ip} for excessive UDP connections")
                         blocked_ips.append(ip)
+                        blocked_ips_cache.add(ip)  # Add to cache to prevent repeated blocking
 
             # Check for excessive ICMP connections
             for ip, count in icmp_count.items():
                 if log_proximity(ip, count, icmp_threshold, "ICMP"):
-                    if count > icmp_threshold:
+                    if count > icmp_threshold and ip not in blocked_ips_cache:  # Check if not already blocked
                         suspicious_activity_detected = True
                         block_ip(ip, "Potential ICMP flood attack")
                         log_ddos_monitor(f"Blocked IP {ip} for excessive ICMP connections")
                         blocked_ips.append(ip)
+                        blocked_ips_cache.add(ip)  # Add to cache to prevent repeated blocking
 
             # Blocked IPs summary
             if blocked_ips:
@@ -830,11 +973,22 @@ def monitor_ddos():
                     suspicious_activity_count -= 1  # Reset the count if no suspicious activity is detected
                 adjust_protection_level("downgrade")
 
-            time.sleep(DDOS_MONITOR_INTERVAL)
+            time.sleep(DDOS_MONITOR_INTERVAL)  # Adjust the interval here (e.g., 10 or 15 seconds)
 
     except Exception as e:
         log_error(f"Error monitoring DDoS: {str(e)}")
-      
+
+def monitor_ddos_with_restarts():
+    """Monitor DDoS attacks and automatically restart the function in case of errors."""
+    while True:
+        try:
+            monitor_ddos()  # Run the DDoS monitoring function
+        except Exception as e:
+            log_error(f"Error monitoring DDoS: {str(e)}")
+            log_error(traceback.format_exc())  # Log the detailed traceback for debugging
+            print(f"{Colors.RED}Error in DDoS monitoring: {str(e)}. Restarting monitor...{Colors.RESET}")
+            time.sleep(5)  # Sleep for 5 seconds before restarting the monitoring function
+     
 def kill_existing_script():
     """Check if the script is already running and kill it if found."""
     try:
@@ -1045,16 +1199,37 @@ WantedBy=multi-user.target
     except Exception as e:
         log_error(f"Error setting up IPTables restore service: {str(e)}")
 
-def monitor_connections_per_ip():
+def monitor_connections_per_ip(server_name):
     """Monitor and log the foreign IPs connected to user-specified local ports, with channel labels and total connections."""
     try:
+        # Select the correct ports and channels based on the server
+        if server_name == "Aphelion LC":
+            server_ports = ["7843", "4585", "5212", "4968"]  # Aphelion ports
+            channel_mapping = {
+                "4585": "CH-1",
+                "4968": "CH-2",
+                "5212": "CH-3",
+                "7843": "CH-4"
+            }
+        elif server_name == "Phoenix LC":
+            server_ports = ["4101", "4102", "4103", "4104"]  # Phoenix ports
+            channel_mapping = {
+                "4101": "CH-1",
+                "4102": "CH-2",
+                "4103": "CH-3",
+                "4104": "CH-4"
+            }
+        else:  # For Manual Input, use CT_PORTS (which contains the ports defined by the user)
+            server_ports = CT_PORTS
+            channel_mapping = {port: f"CH-{i+1}" for i, port in enumerate(CT_PORTS)}
+
         while True:
             # Get the current connections using netstat
             result = subprocess.run(["netstat", "-ntu"], stdout=subprocess.PIPE, universal_newlines=True)
             connections = result.stdout.splitlines()
 
             connection_count = defaultdict(set)  # Use a set to ensure unique ports per IP
-            channel_totals = { "CH-1": 0, "CH-2": 0, "CH-3": 0, "CH-4": 0 }  # To store total connections per channel
+            channel_totals = {channel: 0 for channel in channel_mapping.values()}  # To store total connections per channel
             overall_total_connections = 0  # To store the overall total connections
 
             # Process the output to capture connections on user-specified local ports
@@ -1068,21 +1243,15 @@ def monitor_connections_per_ip():
                     # Extract the local port
                     local_ip, local_port = local_address.rsplit(':', 1)
 
-                    # Check if the local port is in the user-specified ports
-                    if local_port in CT_PORTS:
+                    # Check if the local port is in the user-specified ports for the selected server
+                    if local_port in server_ports:
                         ip = foreign_address.split(':')[0]  # Extract the IP part of the foreign address
                         if ip not in WHITELISTED_IPS:  # Exclude whitelisted IPs
                             connection_count[ip].add(local_port)  # Use set to avoid duplicate ports
 
                             # Map the ports to their respective channels and count totals
-                            if local_port == '4101':
-                                channel_totals["CH-1"] += 1
-                            elif local_port == '4102':
-                                channel_totals["CH-2"] += 1
-                            elif local_port == '4103':
-                                channel_totals["CH-3"] += 1
-                            elif local_port == '4104':
-                                channel_totals["CH-4"] += 1
+                            channel = channel_mapping.get(local_port, f"CH-{local_port}")
+                            channel_totals[channel] += 1
 
             # Calculate the overall total connections
             overall_total_connections = sum(channel_totals.values())
@@ -1095,26 +1264,15 @@ def monitor_connections_per_ip():
                         port_labels = []
                         for port in sorted(ports):
                             # Add channel labels based on port
-                            if port == '4101':
-                                port_labels.append(f"[{port} CH-1]")
-                            elif port == '4102':
-                                port_labels.append(f"[{port} CH-2]")
-                            elif port == '4103':
-                                port_labels.append(f"[{port} CH-3]")
-                            elif port == '4104':
-                                port_labels.append(f"[{port} CH-4]")
-                            else:
-                                port_labels.append(f"[{port}]")  # For other ports, just show the port number
+                            port_labels.append(f"[{port} {channel_mapping.get(port, '')}]")
 
                         total_connections = len(ports)  # Calculate total unique connections (ports)
                         f.write(f"  {ip}: connected to local ports {', '.join(port_labels)} (Total connections: {total_connections})\n")
                     
                     # Log the total per channel
                     f.write(f"\nTotal connections per channel:\n")
-                    f.write(f"  CH-1 (4101): {channel_totals['CH-1']} connections\n")
-                    f.write(f"  CH-2 (4102): {channel_totals['CH-2']} connections\n")
-                    f.write(f"  CH-3 (4103): {channel_totals['CH-3']} connections\n")
-                    f.write(f"  CH-4 (4104): {channel_totals['CH-4']} connections\n")
+                    for channel, total in channel_totals.items():
+                        f.write(f"  {channel}: {total} connections\n")
                     f.write(f"\nOverall total connections: {overall_total_connections}\n\n")
                 else:
                     f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - No foreign IPs connected to user-specified ports.\n")
@@ -1143,7 +1301,13 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Installing necessary dependencies...{Colors.RESET}")
         install_dependencies()
 
-        # Collect inputs from the user
+        # Select the server to configure
+        server_name = select_server()  # Use the select_server() function to get the user's choice
+        
+        # Apply settings based on server choice (Aphelion LC, Phoenix LC, or Manual Input)
+        apply_server_settings(server_name)
+
+        # Choose the protection level
         PROTECTION_LEVEL = show_menu()
         INITIAL_PROTECTION_LEVEL = PROTECTION_LEVEL
         CURRENT_PROTECTION_LEVEL = PROTECTION_LEVEL
@@ -1155,17 +1319,19 @@ def main():
         DDOS_THRESHOLD = DDOS_THRESHOLDS[PROTECTION_LEVEL]
         print(f"{Colors.LIGHT_GREEN}DDoS connection threshold set to {Colors.BOLD_WHITE}{DDOS_THRESHOLD}{Colors.LIGHT_GREEN} connections.{Colors.RESET}")
 
-        # Collect allowed MariaDB IPs and ports
-        ALLOWED_MARIADB_IPS = get_allowed_mariadb_ips()
-        print(f"{Colors.LIGHT_GREEN}Allowed MariaDB IP addresses (including defaults): {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
+        # For Manual Input only: Ask for MariaDB IPs and ports
+        if server_name == "Manual Input":
+            print(f"{Colors.LIGHT_GREEN}Enter the IP addresses allowed to connect to MariaDB (separated by commas):{Colors.RESET}")
+            ALLOWED_MARIADB_IPS = get_allowed_mariadb_ips()
+            print(f"{Colors.LIGHT_GREEN}Allowed MariaDB IP addresses (including defaults): {Colors.BOLD_WHITE}{', '.join(ALLOWED_MARIADB_IPS)}{Colors.RESET}")
 
-        CT_PORTS = get_allowed_ports()
-        print(f"{Colors.LIGHT_GREEN}Allowed ports for traffic (including defaults): {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
-
+            print(f"{Colors.LIGHT_GREEN}Enter additional ports to protect (separated by commas):{Colors.RESET}")
+            CT_PORTS = get_allowed_ports()
+            print(f"{Colors.LIGHT_GREEN}Allowed ports for traffic (including defaults): {Colors.BOLD_WHITE}{', '.join(CT_PORTS)}{Colors.RESET}")
+        
         # Prompt to block countries
-        blocked_countries = prompt_block_countries()  # This now handles everything inside itself
+        blocked_countries = prompt_block_countries()
 
-        # The countries were already blocked inside prompt_block_countries(), no need to call block_countries again here
         print(f"{Colors.LIGHT_GREEN}Flushing existing IPTables rules...{Colors.RESET}")
         flush_iptables_rules()
 
@@ -1185,7 +1351,7 @@ def main():
         print(f"{Colors.LIGHT_GREEN}Applying ICMP rate limit: {Colors.BOLD_WHITE}{ICMP_RATE}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Applying UDP flood protection limit: {Colors.BOLD_WHITE}{UDP_LIMIT}{Colors.RESET}")
         print(f"{Colors.LIGHT_GREEN}Blocking invalid packets...{Colors.RESET}")
-        
+
         # Print IPTables rules applied message in orange
         print(f"{Colors.ORANGE}IPTables rules applied successfully.{Colors.RESET}")
 
@@ -1200,41 +1366,36 @@ def main():
         # Start the background process
         run_in_background()
 
-        # Determine if any countries were blocked and include that in the email
-        blocked_countries_text = (
-            f"<li><strong>Blocked Countries:</strong> {', '.join(blocked_countries)}</li>"
-            if blocked_countries else "<li><strong>Blocked Countries:</strong> None</li>"
-        )
-
         # Send an email to notify that the script has started
-        email_subject = "DDoS Protection Script Started"
+        email_subject = f"{server_name} - DDoS Protection Script Started"
+        blocked_countries_str = ', '.join(blocked_countries) if blocked_countries else "None"
+
         email_message = f"""
         <html>
         <body>
         <h2>Dear Admins,</h2>
-        <p>Block DDoS Automated script has started successfully on Phoenix LC server:</p>
+        <p>Block DDoS Automated script has started successfully on {server_name} server:</p>
         <ul>
             <li><strong>Protection Level:</strong> {PROTECTION_LEVEL}</li>
             <li><strong>Allowed MariaDB IPs:</strong> {', '.join(ALLOWED_MARIADB_IPS)}</li>
             <li><strong>Allowed Ports:</strong> {', '.join(CT_PORTS)}</li>
-            {blocked_countries_text}
+            <li><strong>Blocked Countries:</strong> {blocked_countries_str}</li>
         </ul>
         <p>Best regards,<br>Block DDoS Automated System</p>
         </body>
         </html>
         """
-        send_email(email_subject, email_message)
+        send_email(server_name, email_subject, email_message)
 
         # Automated protection level adjustment based on activity  
         print(f"{Colors.ORANGE}Protection Upgrade Automation ... {Colors.RED}Active!{Colors.RESET}")
 
-        # Start the monitoring threads
-        print(f"{Colors.LIGHT_GREEN}Starting all monitoring threads...{Colors.RESET}")
+        # Start the monitoring threads with the server_name argument
         log_monitor_thread = threading.Thread(target=monitor_logs)
-        ddos_monitor_thread = threading.Thread(target=monitor_ddos)
-        ddos_log_thread = threading.Thread(target=monitor_ddos_log)
-        level_change_log_thread = threading.Thread(target=monitor_level_change_log)
-        connection_monitor_thread = threading.Thread(target=monitor_connections_per_ip)
+        ddos_monitor_thread = threading.Thread(target=monitor_ddos_with_restarts)
+        ddos_log_thread = threading.Thread(target=monitor_ddos_log, args=(server_name,))
+        level_change_log_thread = threading.Thread(target=monitor_level_change_log, args=(server_name,))
+        connection_monitor_thread = threading.Thread(target=monitor_connections_per_ip, args=(server_name,))
 
         # Start threads
         log_monitor_thread.start()
